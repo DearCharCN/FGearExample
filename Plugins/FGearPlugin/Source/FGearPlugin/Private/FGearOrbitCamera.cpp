@@ -14,7 +14,7 @@ UFGearOrbitCamera::UFGearOrbitCamera() :
 	mRotationY(0.0f),
 	mRotationOffset(0.0f),
 	mCurrentTilt(0.0f),
-	mOrbitMode(false)
+	mMouseOrbitTimeRemaining(0.0f)
 {
 }
 
@@ -29,12 +29,16 @@ void UFGearOrbitCamera::BeginPlay()
 
 void UFGearOrbitCamera::injectMouseDX(float mx)
 {
-	if (mOrbitMode) mRotationY += mx;
+	if (mx == 0.0f) return;
+	mRotationY += mx;
+	mMouseOrbitTimeRemaining = 1.5f;
 }
 
 void UFGearOrbitCamera::injectMouseDY(float my)
 {
-	if (mOrbitMode) mTiltAngle += my;
+	if (my == 0.0f) return;
+	mTiltAngle += my;
+	mMouseOrbitTimeRemaining = 1.5f;
 }
 
 void UFGearOrbitCamera::injectMouseDZ(float mz)
@@ -46,8 +50,9 @@ void UFGearOrbitCamera::update(float deltaTime, FMinimalViewInfo& outResult)
 {
 	if (mTarget == nullptr) return;
 
-	//no spring in orbit mode
-	float cspring = mOrbitMode ? 0.0f : mSpring;
+	// Hold the mouse-selected view for 1.5 seconds before resuming the follow spring.
+	float cspring = mMouseOrbitTimeRemaining > 0.0f ? 0.0f : mSpring;
+	mMouseOrbitTimeRemaining = FMath::Max(0.0f, mMouseOrbitTimeRemaining - deltaTime);
 
 	//rotation update when spring is non zero
 	{

@@ -30,7 +30,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setFreeze(bool f) { mFreeze = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setOrbitMode(bool orbit) { mOrbitMode = orbit; }
+	void setOrbitMode(bool orbit) { } // Legacy Blueprint hook; mouse movement now controls orbit mode.
 
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setSpring(float s) { mSpring = s; }
@@ -62,5 +62,5 @@ private:
 	float mRotationY;
 	float mRotationOffset;
 	float mCurrentTilt;
-	bool mOrbitMode;
+	float mMouseOrbitTimeRemaining;
 };
