@@ -9,6 +9,8 @@ Saved/
 .idea/
 .vscode/
 *.sln
+*.slnx
+.vsconfig
 *.suo
 *.sdf
 *.opensdf

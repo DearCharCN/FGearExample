@@ -1,0 +1,41 @@
+{
+	"FileVersion": 3,
+	"Version": 15,
+	"VersionName": "1.8.2",
+	"FriendlyName": "FGear Vehicle Physics",
+	"Description": "A semi-arcade custom vehicle physics solution.",
+	"Category": "Physics",
+	"CreatedBy": "lazybitgames",
+	"CreatedByURL": "https://fgearvp.wordpress.com",
+	"DocsURL": "https://www.dropbox.com/s/o8fdgsiezfaf20h/fgue4docs.rar?dl=0",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/34e20fc0b8d54f72b77d00ddbe1121df",
+	"SupportURL": "https://fgearvp.wordpress.com/contact/",
+	"EngineVersion": "5.8.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "FGearPlugin",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Android"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Niagara",
+			"Enabled": true
+		},
+		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
+		},
+		{
+			"Name": "EnhancedInput",
+			"Enabled": true
+		}
+	]
+}
