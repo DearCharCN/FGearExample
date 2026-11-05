@@ -1,0 +1,38 @@
+# Unreal Engine generated files and local caches
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE settings and generated project files
+.vs/
+.idea/
+.vscode/
+*.sln
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.code-workspace
+*.xcodeproj/
+*.xcworkspace/
+
+# Local configuration and signing credentials
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pfx
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep Config, Content, Source, project/plugin descriptors and Build resources.
