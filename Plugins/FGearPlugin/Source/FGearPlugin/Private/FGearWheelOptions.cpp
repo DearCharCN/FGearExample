@@ -22,6 +22,7 @@ UFGearWheelOptions::UFGearWheelOptions() :
 	mWidth(0.2f),
 	mForwardOffset(0.0f),
 	mSpacerOffset(0.0f),
+	mVerticalOffset(0.0f),
 	mRimOffset(0.0f),
 	mCastOffset(0.0f),
 	mMass(10.0f),
@@ -49,6 +50,7 @@ void UFGearWheelOptions::reset()
 	mWidth = 0.2f;
 	mForwardOffset = 0.0f;
 	mSpacerOffset = 0.0f;
+	mVerticalOffset = 0.0f;
 	mRimOffset = 0.0f;
 	mCastOffset = 0.0f;
 	mMass = 10.0f;

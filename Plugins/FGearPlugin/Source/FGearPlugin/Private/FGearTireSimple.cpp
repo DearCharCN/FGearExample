@@ -4,14 +4,14 @@
 
 UFGearTireSimple::UFGearTireSimple() :
 	UFGearTire(),
-	Lnb(15.0),
-	Lnc(2.0),
-	Lnd(1.0),
-	Lne(0.95),
-	Ltb(5.0),
-	Ltc(2.0),
-	Ltd(1.0),
-	Lte(0.9)
+	Lnb(15.0f),
+	Lnc(2.0f),
+	Lnd(1.0f),
+	Lne(0.95f),
+	Ltb(5.0f),
+	Ltc(2.0f),
+	Ltd(1.0f),
+	Lte(0.9f)
 {
 	updatePreviewCurve();
 }

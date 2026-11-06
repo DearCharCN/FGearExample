@@ -195,13 +195,14 @@ void UFGearTireMF61::calculate(float load, float slipRatio, float slipAngle, flo
 	float Fx0, Kxk;
 	{
 		float ux = (PDX1 + PDX2 * dFz) * (1.0f + PPX3 * dPi + PPX4 * dPi * dPi) * (1.0f - PDX3 * y * y);
-		float Dx = ux * Fz;
-		float Cx = PCX1;
+		float Dx = FMath::Max(ux * Fz, 0.0f); //>0
+		float Cx = FMath::Max(PCX1, 0.0f); //>0
 		Kxk = Fz * (PKX1 + PKX2 * dFz) * FMath::Exp(PKX3 * dFz) * (1.0f + PPX1 * dPi + PPX2 * dPi * dPi);
 		float Bx = Kxk / (Cx * Dx + FGearUtility::epsilon);
 		float Shx = PHX1 + PHX2 * dFz;
 		float Kx = k + Shx;
 		float Ex = (PEX1 + PEX2 * dFz + PEX3 * dFz * dFz) * (1.0f - PEX4 * FMath::Sign(Kx));
+		Ex = FMath::Min(Ex, 1.0f); //<=1
 		float Svx = Fz * (PVX1 + PVX2 * dFz);
 		Fx0 = Dx * FMath::Sin(Cx * FMath::Atan(Bx * Kx - Ex * (Bx * Kx - FMath::Atan(Bx * Kx)))) + Svx;
 	}
@@ -211,7 +212,7 @@ void UFGearTireMF61::calculate(float load, float slipRatio, float slipAngle, flo
 	{
 		float uy = (PDY1 + PDY2 * dFz) * (1.0f + PPY3 * dPi + PPY4 * dPi * dPi) * (1.0f - PDY3 * yi * yi);
 		float Dy = uy * Fz;
-		Cy = PCY1;
+		Cy = FMath::Max(PCY1, 0.0f); //>0
 		Kya = PKY1 * Fz0 * (1.0f + PPY1 * dPi) * (1.0f - PKY3 * FMath::Abs(yi)) * FMath::Sin(PKY4 * FMath::Atan((Fz / Fz0) / ((PKY2 + PKY5 * yi * yi) * (1.0f + PPY2 * dPi))));
 		float Kyy = Fz * (PKY6 + PKY7 * dFz) * (1.0f + PPY5 * dPi);
 		By = Kya / (Cy * Dy + FGearUtility::epsilon);
@@ -219,6 +220,7 @@ void UFGearTireMF61::calculate(float load, float slipRatio, float slipAngle, flo
 		Shy = (PHY1 + PHY2 * dFz) + (Kyy * yi - Svyy) / (Kya + FGearUtility::epsilon);
 		float Ay = ai + Shy;
 		float Ey = (PEY1 + PEY2 * dFz) * (1.0f + (PEY5 * yi * yi) - (PEY3 + PEY4 * yi) * FMath::Sign(Ay));
+		Ey= FMath::Min(Ey, 1.0f); //<=1
 		Svy = Fz * (PVY1 + PVY2 * dFz) + Svyy;
 		Fy0 = Dy * FMath::Sin(Cy * FMath::Atan(By * Ay - Ey * (By * Ay - FMath::Atan(By * Ay)))) + Svy;
 		Dyk = Dy;
@@ -227,25 +229,27 @@ void UFGearTireMF61::calculate(float load, float slipRatio, float slipAngle, flo
 	//combined Gx
 	float Gx;
 	{
-		float Bxa = (RBX1 + RBX3 * yi * yi) * FMath::Cos(FMath::Atan(RBX2 * k));
+		float Bxa = FMath::Max((RBX1 + RBX3 * yi * yi) * FMath::Cos(FMath::Atan(RBX2 * k)), 0.0f); //>0
 		float Cxa = RCX1;
 		float Shxa = RHX1;
 		float As = ai + Shxa;
-		float Exa = REX1 + REX2 * dFz;
+		float Exa = FMath::Min(REX1 + REX2 * dFz, 1.0f); //<=1
 		float G0 = FMath::Cos(Cxa * FMath::Atan(Bxa * Shxa - Exa * (Bxa * Shxa - FMath::Atan(Bxa * Shxa))));
 		Gx = FMath::Cos(Cxa * FMath::Atan(Bxa * As - Exa * (Bxa * As - FMath::Atan(Bxa * As)))) / G0;
+		Gx = FMath::Max(Gx, 0.0f); //>0
 	}
 
 	//combined Gy
 	float Gy;
 	{
-		float Byk = (RBY1 + RBY4 * yi * yi) * FMath::Cos(FMath::Atan(RBY2 * (ai - RBY3)));
+		float Byk = FMath::Max((RBY1 + RBY4 * yi * yi) * FMath::Cos(FMath::Atan(RBY2 * (ai - RBY3))), 0.0f); //>0
 		float Cyk = RCY1;
 		float Shyk = RHY1 + RHY2 * dFz;
 		float Ks = k + Shyk;
-		float Eyk = REY1 + REY2 * dFz;
+		float Eyk = FMath::Min(REY1 + REY2 * dFz, 1.0f); //<=1
 		float G0 = FMath::Cos(Cyk * FMath::Atan(Byk * Shyk - Eyk * (Byk * Shyk - FMath::Atan(Byk * Shyk))));
 		Gy = FMath::Cos(Cyk * FMath::Atan(Byk * Ks - Eyk * (Byk * Ks - FMath::Atan(Byk * Ks)))) / G0;
+		Gy = FMath::Max(Gy, 0.0f); //>0
 	}
 
 	//combined Svyk
@@ -305,18 +309,20 @@ void UFGearTireMF61::calculate(float load, float slipRatio, float slipAngle, flo
 	}
 
 	//combine torques
-	mCombinedTorque.Set(My, Mz, Mx);
+	mCombinedTorque.Set(Mx, My, Mz);
 }
 
 float UFGearTireMF61::pneumaticTrail(float at, float slipAngle, float yi, float radius, float Fz, float dFz, float dPi, float signVcx)
 {
 	float Fz0 = mNominalLoad;
 	float Bt = (QBZ1 + QBZ2 * dFz + QBZ3 * dFz * dFz) * (1.0f + QBZ4 * FMath::Abs(yi) + QBZ5 * yi * yi);
-	float Ct = QCZ1;
+	Bt = FMath::Max(Bt, 0.0f); //>0
+	float Ct = FMath::Max(QCZ1, 0.0f); //>0
 	float R0 = radius;
 	float Dt0 = Fz * (R0 / Fz0) * (QDZ1 + QDZ2 * dFz) * (1.0f - PPZ1 * dPi) * signVcx;
 	float Dt = Dt0 * (1.0f + QDZ3 * FMath::Abs(yi) + QDZ4 * yi * yi);
 	float Et = (QEZ1 + QEZ2 * dFz + QEZ3 * dFz * dFz) * (1.0f + (QEZ4 + QEZ5 * yi) * (2.0f / PI) * FMath::Atan(Bt * Ct * at));
+	Et = FMath::Min(Et, 1.0f); //<=1
 	float t0 = Dt * FMath::Cos(Ct * FMath::Atan(Bt * at - Et * (Bt * at - FMath::Atan(Bt * at)))) * FMath::Cos(slipAngle);
 	return t0;
 }

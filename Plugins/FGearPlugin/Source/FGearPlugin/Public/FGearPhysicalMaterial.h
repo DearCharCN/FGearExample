@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Particles/ParticleSystem.h"
+#include "NiagaraSystem.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "FGearPhysicalMaterial.generated.h"
 
@@ -20,7 +20,7 @@ public:
 	float mRoughness;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FGearPhysicalMaterial", DisplayName = "Smoke Particle")
-	UFXSystemAsset* mSmokeParticle;
+	UNiagaraSystem* mSmokeParticle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FGearPhysicalMaterial", DisplayName = "Skid Clip")
 	class USoundWave* mSkidClip;

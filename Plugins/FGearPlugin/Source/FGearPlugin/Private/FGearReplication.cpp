@@ -25,6 +25,7 @@ UFGearReplication::UFGearReplication() :
 	mLocalTime(0.0f),
 	mInputSendTime(0.0f),
 	mStateSendTime(0.0f),
+	mHasController(false),
 	mExtraTime(0.0f),
 	mCollisionTime(1.0f),
 	mCollisionErrorTime(1.0f),
@@ -64,7 +65,7 @@ void UFGearReplication::init(AFGearVehicle* v)
 		mVehicle->SetReplicateMovement(false);
 
 		//clients are kinematic in server auth mode
-		if (mServerAuthority)
+		if (mServerAuthority && mVehicle->getBody())
 		{
 			bool simulate = mVehicle->GetLocalRole() == ENetRole::ROLE_Authority;
 			mVehicle->getBody()->SetInstanceSimulatePhysics(simulate);
@@ -122,24 +123,34 @@ void UFGearReplication::myUpdate(float dt)
 	mLocalTime += (serverTime - mLocalTime) * dt;
 	mTick++;
 
-	//input replication
-	if (mInputSendRate > 0)
+	//check controller state (for client auth mode)
+	if (!mServerAuthority && mVehicle->GetLocalRole() == ENetRole::ROLE_Authority)
 	{
-		//update inputs
-		updateInputs(dt);
-
-		//local player send inputs
-		sendInputs(dt);
+		mHasController = mVehicle->IsPawnControlled();
 	}
 
-	//state replication
-	if (mStateSendRate > 0)
+	//skip replication when there is no controller (for client auth mode)
+	if ((mServerAuthority || mHasController) && mVehicle->getBody())
 	{
-		//clients update interpolation
-		updateInterpolation(dt);
-		
-		//server sends states
-		sendStates(dt);
+		//input replication
+		if (mInputSendRate > 0)
+		{
+			//update inputs
+			updateInputs(dt);
+
+			//local player send inputs
+			sendInputs(dt);
+		}
+
+		//state replication
+		if (mStateSendRate > 0)
+		{
+			//clients update interpolation
+			updateInterpolation(dt);
+
+			//server sends states
+			sendStates(dt);
+		}
 	}
 }
 
@@ -404,6 +415,7 @@ void UFGearReplication::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UFGearReplication, mCurrentInput, COND_SkipOwner);
+	DOREPLIFETIME(UFGearReplication, mHasController);
 }
 
 FVector2D UFGearReplication::drawTelemetry(UCanvas* Canvas, UFont* Font, FLinearColor textColor, FFontRenderInfo renderInfo, FVector2D p)

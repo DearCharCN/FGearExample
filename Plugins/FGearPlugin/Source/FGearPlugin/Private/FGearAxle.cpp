@@ -12,6 +12,7 @@ UFGearAxle::UFGearAxle() :
 	UFGearTelemetryDrawer(),
 	mDiffStrength(0.25f),
 	mTorqueShare(0.5f),
+	mFinalGearRatio(3.5f),
 	mMaxSteerAngle(0.0f),
 	mAckermanCoeff(1.0f),
 	mAckermanReferenceIndex(1),
@@ -52,17 +53,6 @@ void UFGearAxle::reset()
 	mDiffStrength = 0.25f;
 	mCamberAngle = 0.0f;
 	mToeAngle = 0.0f;
-}
-
-void UFGearAxle::setFinalGearRatio(float f)
-{
-	if (AFGearVehicle* vehicle = Cast<AFGearVehicle>(GetOwner()))
-	{
-		if (UFGearTransmission* transmission = vehicle->getTransmission())
-		{
-			transmission->setFinalGearRatio(f);
-		}
-	}
 }
 
 void UFGearAxle::applyWheelOptions()
@@ -127,7 +117,7 @@ void UFGearAxle::steeringUpdate()
 void UFGearAxle::calculateAxleTorque()
 {
 	float engineTorque = mEngine->getTorque();
-	float transRatio = mTransmission->getTransmissionRatio() * mTransmission->getClutchState();
+	float transRatio = mTransmission->getTransmissionRatio(this) * mTransmission->getClutchState();
 	mAxleTorque = transRatio * engineTorque * mTorqueShare;
 	mLeftTorque = mRightTorque = 0.0f;
 	
@@ -207,28 +197,29 @@ float UFGearAxle::getSteeringInput()
 
 float UFGearAxle::getCurRpm() const
 {
-	float transRatio = mTransmission->getTransmissionRatio();
+	float transRatio = mTransmission->getTransmissionRatio(this);
 	if (mTorqueShare == 0.0f || transRatio == 0.0f) return 0.0f;
 	return mEngine->getRpm() / transRatio;
 }
 
 float UFGearAxle::getMaxRpm() const
 {
-	float transRatio = mTransmission->getTransmissionRatio();
+	float transRatio = mTransmission->getTransmissionRatio(this);
 	if (mTorqueShare == 0.0f || transRatio == 0.0f) return 0.0f;
 	return mEngine->getLimitRpm() / transRatio;
 }
 
 float UFGearAxle::getFeedbackTorque() const
 {
-	float transRatio = mTransmission->getTransmissionRatio();
+	float transRatio = mTransmission->getTransmissionRatio(this);
 	if (mTorqueShare == 0.0f || transRatio == 0.0f) return 0.0f;
 	return (mWheelLeft->getFeedbackTorque() + mWheelRight->getFeedbackTorque()) / transRatio;
 }
 
 float UFGearAxle::getWheelRPMToKMH() const
 {
-	return 0.5f * (mWheelLeft->getWheelRPMToKMH() + mWheelRight->getWheelRPMToKMH());
+	if (mFinalGearRatio == 0.0f) return 0.0f;
+	return 0.5f * (mWheelLeft->getWheelRPMToKMH() + mWheelRight->getWheelRPMToKMH()) / mFinalGearRatio;
 }
 
 float UFGearAxle::getNormalizedSteering() const
@@ -277,7 +268,8 @@ float UFGearAxle::getTrackWidth() const
 float UFGearAxle::getDrivetrainFriction() const
 {
 	if (mAxleTorque == 0.0f) return 0.0f;
-	return mVehicle->getDrivetrainFriction() * mTransmission->getClutchState();
+	float absAxleSpeed = FMath::Abs(getCurRpm()) * FGearUtility::rpm2Rads;
+	return absAxleSpeed * mVehicle->getDrivetrainFriction() * mTransmission->getClutchState();
 }
 
 bool UFGearAxle::hasSteering() const
@@ -307,6 +299,7 @@ bool UFGearAxle::CanEditChange(const FProperty* Property) const
 {
 	const bool ParentVal = Super::CanEditChange(Property);
 	if (Property->GetFName() == GET_MEMBER_NAME_CHECKED(UFGearAxle, mDiffStrength)) return mDifferentialType == FGearDifferentialType::DF_LSD;
+	if (Property->GetFName() == GET_MEMBER_NAME_CHECKED(UFGearAxle, mFinalGearRatio)) return mTorqueShare > 0.0f;
 	return ParentVal;
 }
 #endif

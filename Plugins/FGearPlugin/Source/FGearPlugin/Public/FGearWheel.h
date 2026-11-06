@@ -39,6 +39,7 @@ public:
 
 	void init(AFGearVehicle* v, UFGearAxle* axle);
 	void refreshParameters();
+	void refreshVehicleReferences();
 	void reset();
 	void myFixedUpdate(float dt, float dts, int step, FVector& force, FVector& torque);
 	void visualsUpdate(float dt);
@@ -76,6 +77,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	FVector getGlobalRight() const;
 	FVector getGroundVelocity() const { return mGroundVelocity; }
+	UFUNCTION(BlueprintCallable, Category = "FGear")
+	FVector getLocalSpring() const { return mLocalSpringForce; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getGroundSpeed() const { return mLocalVelocity.X / mRadius; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -174,7 +177,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setWidth(float f) { mWidth = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setLateralOffsets(float forward, float spacer, float rim);
+	void setWheelOffsets(float forward, float spacer, float vertical, float rim);
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setBoneName(const FString& NewName);
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -240,6 +243,7 @@ private:
 	float mWidth;
 	float mForwardOffset;
 	float mSpacerOffset;
+	float mVerticalOffset;
 	float mRimOffset;
 	float mCastOffset;
 	float mMass;
@@ -264,6 +268,7 @@ private:
 
 	//forces
 	FVector mSpringForce;
+	FVector mLocalSpringForce;
 	FVector mLateralForce;
 	FVector mLongitudinalForce;
 	FVector mCombinedTorque;
@@ -307,6 +312,7 @@ private:
 	bool mHandbrakeActive;
 
 	//others
+	bool mAccelerating;
 	float mRealSpeed; //rad/s
 	float mWheelTorque;
 	float mBrakeTorque;

@@ -51,6 +51,8 @@ protected:
 	FGearForceCombineMode mCombineMode;
 	UPROPERTY(EditAnywhere, Category = "FGearTire", DisplayName = "Reference Load")
 	float mReferenceLoad;
+	UPROPERTY(EditAnywhere, Category = "FGearTire", DisplayName = "Reference Camber")
+	float mReferenceCamber;
 	UPROPERTY(EditAnywhere, Category = "FGearTire", DisplayName = "Reference Tire Pressure")
 	float mReferenceTirePressure;
 	UPROPERTY(EditAnywhere, Category = "FGearTire", DisplayName = "Force Symmetry")

@@ -10,6 +10,8 @@
 
 class UFGearTransmission;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGearEngineStartStopSignature, bool, started);
+
 UCLASS()
 class FGEARPLUGIN_API UFGearEngine : public UFGearTelemetryDrawer
 {
@@ -93,6 +95,9 @@ public:
 	void setRunning(bool b);
 
 	virtual FVector2D drawTelemetry(UCanvas* Canvas, UFont* Font, FLinearColor textColor, FFontRenderInfo renderInfo, FVector2D p) override;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FGearEngineStartStopSignature OnStartStop;
 
 private:
 	/** The engine torque is directly the result of this curve. The X axis of the curve represents engine rpm and Y axis is the torque value in Nm. There are real world vehicles engine curves available on the internet, mimicking those curves is a good way to start. */

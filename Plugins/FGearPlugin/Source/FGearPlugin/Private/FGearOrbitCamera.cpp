@@ -50,16 +50,16 @@ void UFGearOrbitCamera::update(float deltaTime, FMinimalViewInfo& outResult)
 {
 	if (mTarget == nullptr) return;
 
-	// Hold the mouse-selected view for 1.5 seconds before resuming the follow spring.
+	// Preserve the sample's mouse orbit and delayed recentering with 1.8.5's Euler convention.
 	float cspring = mMouseOrbitTimeRemaining > 0.0f ? 0.0f : mSpring;
 	mMouseOrbitTimeRemaining = FMath::Max(0.0f, mMouseOrbitTimeRemaining - deltaTime);
 
 	//rotation update when spring is non zero
 	{
 		//lerp towards current tilt angle
-		float tilt = mTarget->GetActorRotation().Euler().Y - mTiltAngle;
+		float tilt = -mTarget->GetActorRotation().Euler().Y + mTiltAngle;
 		if (cspring > 0.0f) mCurrentTilt = FGearUtility::LerpAngle(mCurrentTilt, tilt, cspring * deltaTime);
-		else mCurrentTilt = -mTiltAngle;
+		else mCurrentTilt = mTiltAngle;
 		//lerp towards current yaw angle
 		float targetAngle = mTarget->GetActorRotation().Euler().Z;
 		if (mDriftMode)

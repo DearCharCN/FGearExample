@@ -3,6 +3,7 @@
 #include "FGearTransmission.h"
 #include "FGearVehicle.h"
 #include "FGearEngine.h"
+#include "FGearAxle.h"
 #include <limits>
 
 #if WITH_EDITOR
@@ -23,7 +24,6 @@ UFGearTransmission::UFGearTransmission() :
 	mGearDownVelocityBias(1.0f),
 	mClutchTime(100.0f),
 	mClutchScale(100.0f),
-	mFinalGearRatio(3.0f),
 #if WITH_EDITOR
 	mLayout(nullptr),
 #endif
@@ -80,7 +80,7 @@ void UFGearTransmission::refreshParameters()
 	for (int i = 0; i < mMaxSpeeds.Num(); i++)
 	{
 		float gearRatio = (i == mMaxSpeeds.Num() - 1) ? getGearRatio(-1) : getGearRatio(i + 1);
-		float wheelRpm = limitRpm / (gearRatio * mFinalGearRatio);
+		float wheelRpm = limitRpm / gearRatio;
 		mMaxSpeeds[i] = wheelRpm * mVehicle->getMaxWheelRPMToKMH();
 	}
 }
@@ -202,7 +202,7 @@ void UFGearTransmission::setCurrentGear(int gear, bool force)
 		mCurGear = gear;
 		mNextGear = gear;
 	}
-	else if (gear != mCurGear && (mAutoClutchActive || mClutchState < 1.0f))
+	else if (gear != mCurGear && (mCurGear != -1 || gear != 7) && (mAutoClutchActive || mClutchState < 1.0f))
 	{
 		mNextGear = gear;
 		//R
@@ -214,7 +214,7 @@ void UFGearTransmission::setCurrentGear(int gear, bool force)
 		if (mRevMatching && mNextGear != mCurGear && mNextGear > 0)
 		{
 			float wheelRpm = mVehicle->getMaxWheelKMHSpeed(true, true) / mVehicle->getMaxWheelRPMToKMH();
-			float targetRpm = wheelRpm * getGearRatio(mNextGear) * mFinalGearRatio;
+			float targetRpm = wheelRpm * getGearRatio(mNextGear);
 			if (targetRpm > mVehicle->getEngine()->getRpm())
 			{
 				mVehicle->getEngine()->setRevMatching(0.001f * mChangeTime, targetRpm);
@@ -243,7 +243,7 @@ void UFGearTransmission::gearUp(bool skipN)
 		if (mRevMatching)
 		{
 			float wheelRpm = mVehicle->getMaxWheelKMHSpeed(true, true) / mVehicle->getMaxWheelRPMToKMH();
-			float targetRpm = wheelRpm * getGearRatio(mNextGear) * mFinalGearRatio;
+			float targetRpm = wheelRpm * getGearRatio(mNextGear);
 			mVehicle->getEngine()->setRevMatching(mPauseTime, targetRpm);
 		}
 		else mVehicle->getEngine()->setLimiter(mPauseTime);
@@ -270,16 +270,22 @@ void UFGearTransmission::gearDown(bool skipN)
 		if (mRevMatching)
 		{
 			float wheelRpm = mVehicle->getMaxWheelKMHSpeed(true, true) / mVehicle->getMaxWheelRPMToKMH();
-			float targetRpm = wheelRpm * getGearRatio(mNextGear) * mFinalGearRatio;
+			float targetRpm = wheelRpm * getGearRatio(mNextGear);
 			mVehicle->getEngine()->setRevMatching(mPauseTime, targetRpm);
 		}
 		else mVehicle->getEngine()->setLimiter(mPauseTime);
 	}
 }
 
-float UFGearTransmission::getTransmissionRatio() const
+float UFGearTransmission::getCurrentGearRatio() const
 {
-	return mFinalGearRatio * getGearRatio(mCurGear);
+	return getGearRatio(mCurGear);
+}
+
+float UFGearTransmission::getTransmissionRatio(const UFGearAxle* axle) const
+{
+	if (axle == nullptr) return 0.0f;
+	return getGearRatio(mCurGear) * axle->getFinalGearRatio();
 }
 
 float UFGearTransmission::getGearRatio(int gear) const
@@ -306,6 +312,15 @@ void UFGearTransmission::setClutchState(float cs)
 		mAutoClutchActive = false;
 		mClutchState = cs;
 	}
+}
+
+void UFGearTransmission::setGearCount(int size)
+{
+#if ENGINE_MAJOR_VERSION == 5
+	mGearRatios.SetNum(size, EAllowShrinking::Yes);
+#else
+	mGearRatios.SetNum(size, true);
+#endif
 }
 
 void UFGearTransmission::saveState(FFGearVehicleState& state)

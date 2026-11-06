@@ -186,7 +186,12 @@ void UFGearEngine::setThrottle(float pedal)
 //set engine on/off
 void UFGearEngine::setRunning(bool b)
 {
-	mRunning = b;
+	if (b != mRunning)
+	{
+		if (OnStartStop.IsBound()) OnStartStop.Broadcast(b);
+		mRunning = b;
+	}
+	
 	mThrottle = 0.0f;
 	mMatchRpm = 0.0f;
 	mMatchTime = 0.0f;

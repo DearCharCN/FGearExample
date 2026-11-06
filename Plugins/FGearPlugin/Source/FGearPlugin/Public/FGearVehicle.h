@@ -28,7 +28,6 @@ class UFGearStandardInput;
 class UFGearOrbitCamera;
 class UFGearArcadeAssists;
 class UFGearReplication;
-class UFGearSuspensionConstraint;
 #if WITH_EDITOR
 class FReply;
 #endif
@@ -170,7 +169,9 @@ public:
 	FGearUpDirection getConvexUp() const { return mConvexUp; }
 	FRotator getConvexRotation() const { return mConvexRotation; }
 	bool getConvexVisible() const { return mConvexVisible; }
+	bool isBikeModeOn() const { return mBikeMode; }
 	UStaticMesh* getDefaultCylinderAsset() const { return mDefaultCylinderAsset; }
+	void applyResponseOverrides(FCollisionResponseParams& responseParams);
 
 	void addForce(FVector f);
 	void addRelativeForce(FVector f);
@@ -256,6 +257,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	FVector getCenterofMass() const { return mCenterofMass; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
+	FVector getLocalSpringForce() const;
+	UFUNCTION(BlueprintCallable, Category = "FGear")
 	int getRayCount() const { return mRays; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	ECollisionChannel getTraceChannel() const { return mTraceChannel; }
@@ -272,15 +275,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getHandbrakePower() const { return mHandBrakePower; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	float getRollingResistanceCoeff() const { return mRollingResistanceCoeff; }
+	float getWheelFrictionCoeff() const { return mWheelFrictionCoeff; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getDrivetrainInertia() const { return mDrivetrainInertia; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getDrivetrainFriction() const { return mDrivetrainFriction; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getReverseBrakeSpeed() const { return mReverseBrakeSpeed; }
-	UFUNCTION(BlueprintCallable, Category = "FGear")
-	bool getAllowReverse() const { return mAllowReverse; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	bool getDetectGround() const { return mDetectGround; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -370,7 +371,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setHandbrakePower(float f) { mHandBrakePower = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setRollingResistanceCoeff(float f) { mRollingResistanceCoeff = f; }
+	void setWheelFrictionCoeff(float f) { mWheelFrictionCoeff = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setDrivetrainInertia(float f) { mDrivetrainInertia = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -386,8 +387,6 @@ public:
 	void setOptimumSlipState(float f) { mOptimumSlipState = FMath::Clamp(f, 0.0f, 1.0f); }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setReverseBrake(float f) { mReverseBrakeSpeed = f; }
-	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setAllowReverse(bool allow) { mAllowReverse = allow; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setDetectGround(bool b) { mDetectGround = b; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -415,7 +414,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setRearAntiRollPower(float f) { mRearAntiRollPower = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
+	void setMaxHillHolderSpeed(float f) { mMaxHillHolderSpeed = f; }
+	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setUpdateInputs(bool b) { mUpdateInputs = b; }
+	UFUNCTION(BlueprintCallable, Category = "FGear")
+	void setAxleIndex(UFGearAxle* axle, int index);
+	UFUNCTION(BlueprintCallable, Category = "FGear")
+	void setMesh(USkeletalMesh* mesh, TSubclassOf<UAnimInstance> animClass, UPhysicsAsset* physicsAsset);
+	UFUNCTION(BlueprintCallable, Category = "FGear")
+	void setBikeMode(bool b) { mBikeMode = b; }
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FGearSleepSignature onSleepEvent;
@@ -430,6 +437,7 @@ protected:
 
 private:
 	void myFixedUpdate(int i, float dt, float dts);
+	void updateAutoBrake();
 	void updateESP();
 	void updateAntiRollBar();
 	void handleHardContacts(float dt);
@@ -437,6 +445,7 @@ private:
 	float getCurrentSteering() const;
 	void recalcRays();
 	void initializeAxles(TArray<USceneComponent*> components, int index);
+	void initAxles();
 
 	void prepareTelemetry();
 	UFUNCTION(Reliable, Client)
@@ -478,8 +487,6 @@ private:
 	UFGearOrbitCamera* mOrbitCamera;
 	UPROPERTY(NoClear)
 	UFGearArcadeAssists* mArcadeAssists;
-	UPROPERTY(NoClear)
-	UFGearSuspensionConstraint* mSuspensionConstraint;
 
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "FGearVehicle", DisplayName = "Front Axle")
 	UFGearAxle* mAxle0;
@@ -542,6 +549,9 @@ private:
 	/** Extra filtering parameter of type FMaskFilter. This filter allows us to refine queries (channel, object) with an additional level of ignore by tagging entire classes of objects. */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Tracing", DisplayName = "Query Ignore Mask")
 	uint8 mIgnoreMask;
+	/** This only works with line & sphere tracing. By default all channel responses are set to blocked, if you want to modify a channel response you can add an override to this list. */
+	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Tracing", DisplayName = "Query Response Overrides")
+	TMap<TEnumAsByte<ECollisionChannel>, TEnumAsByte<ECollisionResponse>> mResponseOverrides;
 	/** Whether we should trace against complex(mesh) collision. */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Tracing", DisplayName = "Trace Complex")
 	bool mTraceComplex;
@@ -563,9 +573,6 @@ private:
 	/** If set the wheels will detect the velocity of the ground and take it into account when calculating velocity. */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "Detect Ground Velocity")
 	bool mDetectGround;
-	/** Suppose you are climbing a ramp in 1st gear and you release the throttle and wait for the car to slow down and stop. Since there is no engine stalling the car will start going backwards as if you have pressed the clutch if this value is set. If not set the wheels will resist going backwards */
-	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "Allow Wheel Rotation Against Engine")
-	bool mAllowReverse;
 	/** It is not always possible to keep the suspension compression within limits. If the suspension is compressed beyond its limits then there are two possibilities. If this is checked the tires will penetrate the ground else the tires will stay on ground but can penetrate the fenders. */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "Suspension Tire Penetration")
 	bool mTirePenetration;
@@ -582,8 +589,8 @@ private:
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "Reverse Brake Speed")
 	float mReverseBrakeSpeed;
 	/** This is the inherent friction factor of wheels. Applied friction force increases linearly as the wheels rotate faster. You may adjust it to limit the maximum speed but be aware that it also decreases the acceleration of the vehicle */
-	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "Rolling Resistance Coefficient")
-	float mRollingResistanceCoeff;
+	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "Wheel Friction Coefficient")
+	float mWheelFrictionCoeff;
 	/** This used when calculating the acceleration/deceleration of the wheels based on applied torque. Higher inertia will result slower accelerations. This has an effect similar to wheel mass values. */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Simulation", DisplayName = "DrivetrainInertia")
 	float mDrivetrainInertia;
@@ -629,6 +636,9 @@ private:
 	/** Rear anti rollbars help to reduce understeering. This only works for 4 wheel vehicles. */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|DriveAssists", DisplayName = "Rear Anti Roll Power", meta = (ClampMin = "0.0", ClampMax = "100.0", UIMin = "0.0", UIMax = "100.0"))
 	float mRearAntiRollPower;
+	/** Hillholder holds the brake when the vehicle travel direction is against the current gear. It's only activated if the speed of the vehicle is below this value. Zero means disabled. */
+	UPROPERTY(EditAnywhere, Category = "FGearVehicle|DriveAssists", DisplayName = "Max HillHolder Speed", meta = (ClampMin = "0.0", ClampMax = "5.0", UIMin = "0.0", UIMax = "5.0"))
+	float mMaxHillHolderSpeed;
 
 	/** The minimum linear velocity(km/h) threshold required for the vehicle to enter sleep mode */
 	UPROPERTY(EditAnywhere, Category = "FGearVehicle|Optimization", DisplayName = "Sleep Linear Threshold")
@@ -669,9 +679,11 @@ private:
 	bool mOverSteering;
 	bool mSubstepping;
 	bool mUpdateInputs;
+	bool mBikeMode;
 	float mStickyTireState;
 	float mOptimumSlipState;
 	float mBrakeInput;
+	float mHoldSign;
 
 	//update
 	float mSimCoeff;

@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 15,
-	"VersionName": "1.8.2",
+	"Version": 18,
+	"VersionName": "1.8.5",
 	"FriendlyName": "FGear Vehicle Physics",
 	"Description": "A semi-arcade custom vehicle physics solution.",
 	"Category": "Physics",
@@ -26,15 +26,15 @@
 	],
 	"Plugins": [
 		{
-			"Name": "Niagara",
-			"Enabled": true
-		},
-		{
 			"Name": "ProceduralMeshComponent",
 			"Enabled": true
 		},
 		{
 			"Name": "EnhancedInput",
+			"Enabled": true
+		},
+		{
+			"Name": "Niagara",
 			"Enabled": true
 		}
 	]

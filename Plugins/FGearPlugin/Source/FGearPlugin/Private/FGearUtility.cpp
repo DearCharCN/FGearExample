@@ -18,7 +18,7 @@ float FGearUtility::SignedAngle(FVector vec1, FVector vec2, FVector nAxis)
 
 FQuat FGearUtility::Euler(float x, float y, float z)
 {
-	return FQuat::MakeFromEuler(FVector(z, x, y));
+	return FQuat::MakeFromEuler(FVector(-z, -x, y));
 }
 
 float FGearUtility::Angle(FVector vec1, FVector vec2)

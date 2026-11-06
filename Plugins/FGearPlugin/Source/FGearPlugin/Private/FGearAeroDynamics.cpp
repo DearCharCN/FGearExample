@@ -32,7 +32,7 @@ void UFGearAeroDynamics::myFixedUpdate()
 
 	//down force
 	mDownForce = 0.5f * mAirDensity * (v * v) * mDownForceCoefficient;
-	FTransform trans = FGearUtility::getWorldTransform(mVehicle->getBody());
+	FTransform trans = FGearUtility::getWorldTransform(mBody);
 	FVector dir = trans.TransformVectorNoScale(FVector::ForwardVector);
 	FVector pos = trans.GetLocation() + (mDownForceXOffset * FGearUtility::meter2cm * dir);
 	mVehicle->addForceAtPosition(mDownForce * FGearUtility::meter2cm * FVector::DownVector, pos);

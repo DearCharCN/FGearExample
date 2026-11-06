@@ -46,6 +46,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getSpacerOffset() const { return mSpacerOffset; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
+	float getVerticalOffset() const { return mVerticalOffset; }
+	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getRimOffset() const { return mRimOffset; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getCastOffset() const { return mCastOffset; }
@@ -91,6 +93,8 @@ public:
 	void setForwardOffset(float f) { mForwardOffset = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setSpacerOffset(float f) { mSpacerOffset = f; }
+	UFUNCTION(BlueprintCallable, Category = "FGear")
+	void setVerticalOffset(float f) { mVerticalOffset = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setRimOffset(float f) { mRimOffset = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -161,6 +165,9 @@ private:
 	/** A positive spacer offset(in meters) will move the wheels away from each other resulting a wider track. */
 	UPROPERTY(EditAnywhere, Category = "FGearWheelOptions|Wheel", DisplayName = "Spacer Offset")
 	float mSpacerOffset;
+	/** A positive vertical offset(in meters) will move the wheels towards +Z direction in local space. */
+	UPROPERTY(EditAnywhere, Category = "FGearWheelOptions|Wheel", DisplayName = "Vertical Offset")
+	float mVerticalOffset;
 	/** This is a lateral offset to the wheel rim. If your wheel position does not match with the physical wheel position you can adjust by using this value. You can activate gizmos from telemetry settings to see if your physical wheels match your wheel models. */
 	UPROPERTY(EditAnywhere, Category = "FGearWheelOptions|Wheel", DisplayName = "Rim Offset")
 	float mRimOffset;

@@ -131,14 +131,15 @@ void UFGearTire96::calculate(float load, float slipRatio, float slipAngle, float
 
 float UFGearTire96::pacejkaFx(float slipRatio, float Fz, float dFz)
 {
-	float ux = PDX1 + PDX2 * dFz;
-	float Dx = ux * Fz;
-	float Cx = PCX1;
+	float ux = PDX1 + PDX2 * dFz; //simplified, lambda_uV is zero by default 
+	float Dx = FMath::Max(ux * Fz, 0.0f); //>0
+	float Cx = FMath::Max(PCX1, 0.0f); //>0
 	float Kxk = Fz * (PKX1 + PKX2 * dFz) * FMath::Exp(PKX3 * dFz);
 	float Bx = Kxk / (Cx * Dx + FGearUtility::epsilon);
 	float Shx = PHX1 + PHX2 * dFz;
 	float Kx = slipRatio + Shx;
 	float Ex = (PEX1 + PEX2 * dFz + PEX3 * dFz * dFz) * (1.0f - PEX4 * FMath::Sign(Kx));
+	Ex = FMath::Min(Ex, 1.0f); //<=1
 	float Svx = Fz * (PVX1 + PVX2 * dFz);
 	float Fx0 = Dx * FMath::Sin(Cx * FMath::Atan(Bx * Kx - Ex * (Bx * Kx - FMath::Atan(Bx * Kx)))) + Svx;
 	return Fx0;
@@ -147,15 +148,16 @@ float UFGearTire96::pacejkaFx(float slipRatio, float Fz, float dFz)
 float UFGearTire96::pacejkaFy(float slipAngle, float camber, float Fz, float dFz, float& Dyk)
 {
 	float Fz0 = mNominalLoad;
-	float uy = (PDY1 + PDY2 * dFz) * (1.0f - PDY3 * camber * camber);
+	float uy = (PDY1 + PDY2 * dFz) * (1.0f - PDY3 * camber * camber); //simplified, lambda_uV is zero by default 
 	float Dy = uy * Fz;
-	float Cy = PCY1;
+	float Cy = FMath::Max(PCY1, 0.0f); //>0
 	float Kya = PKY1 * Fz0 * FMath::Sin(2.0f * FMath::Atan(Fz / (PKY2 * Fz0)));
 	float Ky = Kya * (1.0f - PKY3 * camber * camber);
 	float By = Ky / (Cy * Dy + FGearUtility::epsilon);
 	float Shy = (PHY1 + PHY2 * dFz) + (PHY3 * camber);
 	float Ay = slipAngle + Shy;
 	float Ey = (PEY1 + PEY2 * dFz) * (1.0f - (PEY3 + PEY4 * camber) * FMath::Sign(Ay));
+	Ey = FMath::Min(Ey, 1.0f); //<=1
 	float Svy = Fz * ((PVY1 + PVY2 * dFz) + (PVY3 + PVY4 * dFz) * camber);
 	float Fy0 = Dy * FMath::Sin(Cy * FMath::Atan(By * Ay - Ey * (By * Ay - FMath::Atan(By * Ay)))) + Svy;
 
@@ -167,26 +169,26 @@ float UFGearTire96::pacejkaFy(float slipAngle, float camber, float Fz, float dFz
 
 float UFGearTire96::pacejkaGx(float slipRatio, float slipAngle, float dFz)
 {
-	float Bx = RBX1 * FMath::Cos(FMath::Atan(RBX2 * slipRatio));
+	float Bx = FMath::Max(RBX1 * FMath::Cos(FMath::Atan(RBX2 * slipRatio)), 0.0f); //>0
 	float Cx = RCX1;
 	float Shx = RHX1;
 	float As = slipAngle + Shx;
-	float Ex = REX1 + REX2 * dFz;
+	float Ex = FMath::Min(REX1 + REX2 * dFz, 1.0f); // <=1
 	float G0 = FMath::Cos(Cx * FMath::Atan(Bx * Shx - Ex * (Bx * Shx - FMath::Atan(Bx * Shx))));
 	float Gx = FMath::Cos(Cx * FMath::Atan(Bx * As - Ex * (Bx * As - FMath::Atan(Bx * As)))) / G0;
-	return Gx;
+	return FMath::Max(Gx, 0.0f); //>0
 }
 
 float UFGearTire96::pacejkaGy(float slipRatio, float slipAngle, float dFz)
 {
-	float By = RBY1 * FMath::Cos(FMath::Atan(RBY2 * (slipAngle - RBY3)));
+	float By = FMath::Max(RBY1 * FMath::Cos(FMath::Atan(RBY2 * (slipAngle - RBY3))), 0.0f); //>0
 	float Cy = RCY1;
 	float Shy = RHY1;
 	float Ks = slipRatio + Shy;
-	float Ey = REY1 + REY2 * dFz;
+	float Ey = FMath::Min(REY1 + REY2 * dFz, 1.0f); //<=1
 	float G0 = FMath::Cos(Cy * FMath::Atan(By * Shy - Ey * (By * Shy - FMath::Atan(By * Shy))));
 	float Gy = FMath::Cos(Cy * FMath::Atan(By * Ks - Ey * (By * Ks - FMath::Atan(By * Ks)))) / G0;
-	return Gy;
+	return FMath::Max(Gy, 0.0f); //>0
 }
 
 float UFGearTire96::pacejkaSvyk(float slipRatio, float slipAngle, float camber, float dFz, float Dyk)

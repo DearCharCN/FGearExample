@@ -5,9 +5,7 @@
 #include "CoreMinimal.h"
 #include "FGearTelemetryDrawer.h"
 #include "Components/AudioComponent.h"
-#include "ParticleHelper.h"
-#include "Particles/ParticleSystem.h"
-#include "Particles/ParticleSystemComponent.h"
+#include "NiagaraComponent.h"
 #include "FGearEffects.generated.h"
 
 class AFGearVehicle;
@@ -167,7 +165,7 @@ private:
 	class UFGearPhysicalMaterial* mDefaultPhysicalMaterial;
 
 	UPROPERTY(NoClear)
-	TArray<UFXSystemComponent*> mSmokes;
+	TArray<UNiagaraComponent*> mSmokes;
 
 	AFGearVehicle* mVehicle;
 	TArray<UFGearWheel*> mWheels;

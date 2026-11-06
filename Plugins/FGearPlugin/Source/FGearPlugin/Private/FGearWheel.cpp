@@ -20,6 +20,7 @@ UFGearWheel::UFGearWheel() :
 	UFGearTelemetryDrawer(),
 	mIsActive(true),
 	mConvexShape(nullptr),
+	mVehicle(nullptr),
 	mSpringCoeff(1.0f),
 	mCompressedLength(0.0f),
 	mLastCompressLength(0.0f),
@@ -67,11 +68,20 @@ void UFGearWheel::init(AFGearVehicle* v, UFGearAxle* axle)
 {
 	mVehicle = v;
 	mAxle = axle;
-	mBody = mVehicle->getBody();
-	mAnim = mVehicle->getAnim();
+	refreshVehicleReferences();
 	refreshParameters();
 	setWindowHeight(0);
 	reset();
+}
+
+//should be called if vehicle mesh is changed
+void UFGearWheel::refreshVehicleReferences()
+{
+	if (mVehicle)
+	{
+		mBody = mVehicle->getBody();
+		mAnim = mVehicle->getAnim();
+	}
 }
 
 void UFGearWheel::refreshParameters()
@@ -93,6 +103,7 @@ void UFGearWheel::refreshParameters()
 	mWidth = mAxle->getWheelOptions()->getWidth();
 	mForwardOffset = mAxle->getWheelOptions()->getForwardOffset();
 	mSpacerOffset = mAxle->getWheelOptions()->getSpacerOffset();
+	mVerticalOffset = mAxle->getWheelOptions()->getVerticalOffset();
 	mRimOffset = mAxle->getWheelOptions()->getRimOffset();
 	mCastOffset = mAxle->getWheelOptions()->getCastOffset();
 	mMass = mAxle->getWheelOptions()->getMass();
@@ -115,7 +126,7 @@ void UFGearWheel::refreshParameters()
 
 	//apply offsets & store local hub position
 	//calls updateComponentTransform inside
-	setLateralOffsets(mForwardOffset, mSpacerOffset, mRimOffset);
+	setWheelOffsets(mForwardOffset, mSpacerOffset, mVerticalOffset, mRimOffset);
 }
 
 void UFGearWheel::initConvexCaster()
@@ -163,7 +174,7 @@ void UFGearWheel::updateComponentTransform()
 	if (mBoneName == NAME_None) return;
 	FTransform trans = mVehicle->getBoneTransform(mBoneName);
 	//apply suspension up/down travel changes
-	FVector upOffset = mSuspensionUpTravel * FGearUtility::meter2cm * FVector::UpVector;
+	FVector upOffset = (mSuspensionUpTravel + mVerticalOffset) * FGearUtility::meter2cm * FVector::UpVector;
 	//apply lateral offset changes
 	FVector fwdOffset = mForwardOffset * FGearUtility::meter2cm * FVector::ForwardVector;
 	FVector sideVector = mSide == FGearWheelSide::WS_LEFT ? FVector::LeftVector : FVector::RightVector;
@@ -184,7 +195,7 @@ void UFGearWheel::reset()
 {
 	//forces
 	mSpringForce = mLateralForce = mLongitudinalForce = mCombinedTorque = FVector::ZeroVector;
-	mLocalVelocity = mGroundVelocity = FVector::ZeroVector;
+	mLocalSpringForce = mLocalVelocity = mGroundVelocity = FVector::ZeroVector;
 	//suspension
 	mSpringCoeff = 1.0f;
 	mCompressedLength = mLastCompressLength = mCompressRatio = mCurrentLoad = 0.0f;
@@ -202,6 +213,7 @@ void UFGearWheel::reset()
 	mFeedbackTorque = 0.0f;
 	mABSActive = mASRActive = mHandbrakeActive = false;
 	//others
+	mAccelerating = false;
 	mRealSpeed = mWheelTorque = mBrakeTorque = mBraking = mSpeedOverflow = 0.0f;
 }
 
@@ -258,8 +270,9 @@ void UFGearWheel::myFixedUpdate(float dt, float dts, int step, FVector& force, F
 	if (torque.Y != 0.0f) torque.Y = FMath::Sign(mRealSpeed) * FMath::Abs(torque.Y);
 
 	//add wheel torque feedback, when braking take brake disc radius into account(~%30)
-	torque.Y += mLongitudinalForce.Size() * -FMath::Sign(mWheelTorque) * (mBraking > 0.0f ? 0.3f : 1.0f) * mRadius;
-
+	float torqueRadius = (!mAccelerating && mBraking > 0.0f ? 0.3f : 1.0f) * mRadius;
+	torque.Y += mLongitudinalForce.Size() * -FMath::Sign(mWheelTorque) * torqueRadius;
+	
 	//scale torque
 	torque.Y *= mRollScale;
 	torque.Z *= -mAlignScale;
@@ -321,7 +334,7 @@ void UFGearWheel::updatePhysicsTransform()
 
 void UFGearWheel::suspensionUpdate(float dt)
 {
-	mSpringForce = FVector::ZeroVector;
+	mSpringForce = mLocalSpringForce = FVector::ZeroVector;
 	mCurrentLoad = 0.0f;
 
 	//default wheel pos
@@ -345,6 +358,10 @@ void UFGearWheel::suspensionUpdate(float dt)
 	traceParams.IgnoreMask = mVehicle->getIgnoreMask();
 	traceParams.bTraceComplex = mVehicle->getTraceComplex();
 	ECollisionChannel castMask = mVehicle->getTraceChannel();
+
+	//reponse params
+	FCollisionResponseParams responseParams;
+	mVehicle->applyResponseOverrides(responseParams);
 
 	//line casting
 	if (mVehicle->getQueryType() == FGearQueryType::Line)
@@ -384,7 +401,7 @@ void UFGearWheel::suspensionUpdate(float dt)
 				FVector cdir = dirFrom.RotateAngleAxis(angle, mSteerQuat * rightVector);
 				FVector origin = getHubPosition() + addx - (mCastOffset * FGearUtility::meter2cm) * cdir;
 				FHitResult hit;
-				if (GetWorld() && GetWorld()->LineTraceSingleByChannel(hit, origin, origin + castDist * cdir, castMask, traceParams))
+				if (GetWorld() && GetWorld()->LineTraceSingleByChannel(hit, origin, origin + castDist * cdir, castMask, traceParams, responseParams))
 				{
 					//avoid self collision / check block only
 					if (hit.GetActor() == GetOwner() || hit.bBlockingHit == 0) continue;
@@ -407,7 +424,7 @@ void UFGearWheel::suspensionUpdate(float dt)
 		FVector cdir = -upVector;
 		FVector origin = getHubPosition() - ((mCastOffset + mRadius) * FGearUtility::meter2cm) * cdir;
 		TArray<struct FHitResult> hits;
-		if (GetWorld() && GetWorld()->SweepMultiByChannel(hits, origin, origin + castDist * cdir, FQuat::Identity, castMask, mColShape, traceParams))
+		if (GetWorld() && GetWorld()->SweepMultiByChannel(hits, origin, origin + castDist * cdir, FQuat::Identity, castMask, mColShape, traceParams, responseParams))
 		{
 			//for each hit
 			for (int i = 0; i < hits.Num(); i++)
@@ -514,6 +531,21 @@ void UFGearWheel::suspensionUpdate(float dt)
 		{
 			mSpringForce = FVector::ZeroVector;
 		}
+		//calc. local spring
+		else
+		{
+			//scale with hit normal dot to prevent high angle issues
+			if (!mVehicle->isBikeModeOn())
+			{
+				float dotScale = 1.0f - FMath::Abs(FVector::DotProduct(getGlobalRight(), avgNormal));
+				mSpringForce *= dotScale;
+			}
+
+			//inverse yaw rotate
+			float rz = FGearUtility::getWorldTransform(mBody).Rotator().Euler().Z;
+			FQuat q(FVector::UpVector, FMath::DegreesToRadians(rz));
+			mLocalSpringForce = q.Inverse() * mSpringForce;
+		}
 	}
 	else mLastCompressLength = totalLength;
 }
@@ -527,12 +559,8 @@ void UFGearWheel::stickyTireUpdate()
 	if (mVehicle->getStickyTireState() < 1.0f)
 	{
 		//eliminate lateral spring force
-		FVector localSpring = mSpringForce;
+		FVector localSpring = mLocalSpringForce;
 		float lateralSize = 0.0f;
-		//inverse rotate
-		float rz = FGearUtility::getWorldTransform(mBody).Rotator().Euler().Z;
-		FQuat q(FVector::UpVector, FMath::DegreesToRadians(rz));
-		localSpring = q.Inverse() * localSpring;
 		//zero out laterals (close to zero, some magic numbers here)
 		lateralSize += FMath::Abs(localSpring.Y);
 		localSpring.Y = 0.0f;
@@ -542,6 +570,8 @@ void UFGearWheel::stickyTireUpdate()
 			localSpring.X = 0.0f;
 		}
 		//back to original rotation
+		float rz = FGearUtility::getWorldTransform(mBody).Rotator().Euler().Z;
+		FQuat q(FVector::UpVector, FMath::DegreesToRadians(rz));
 		mSpringForce = q * localSpring;
 		//add slope factor
 		FVector upVector = mPhysicsTrans.TransformVectorNoScale(FVector::UpVector);
@@ -651,7 +681,7 @@ void UFGearWheel::updateWheelTorque()
 	if (axleTorque != 0.0f)
 	{
 		//asr is set to inactive for engine brake case, this avoids irrelevant asr activation at low speeds
-		bool engineBrake = mVehicle->getEngine()->getThrottle() == 0.0f;
+		bool engineBrake = mVehicle->getEngine()->getTorque() <= 0.0f;
 		mASRActive = mHasContact && !engineBrake && mVehicle->getASR() > 0.0f;
 
 		//apply
@@ -659,8 +689,8 @@ void UFGearWheel::updateWheelTorque()
 	}
 
 	//apply rolling friction
-	float frictionTorque = mAxle->getDrivetrainFriction(); //constant friction
-	frictionTorque += 0.1f * mVehicle->getRollingResistanceCoeff() * FMath::Abs(mRealSpeed);
+	float frictionTorque = mRealSpeed != 0.0f ? mAxle->getDrivetrainFriction() : 0.0f;
+	frictionTorque += mVehicle->getWheelFrictionCoeff() * FMath::Abs(mRealSpeed);
 	if (frictionTorque != 0.0f)
 	{
 		mBrakeTorque -= iSign * frictionTorque;
@@ -677,7 +707,8 @@ void UFGearWheel::updateWheelSpeed(float dt)
 	float accCoeff = 1.0f / inertia;
 
 	//take engine inertia into account
-	float engineInertia = mVehicle->getEngine()->getEngineInertia() * mVehicle->getTransmission()->getTransmissionRatio();
+	float transRatio = mVehicle->getTransmission()->getTransmissionRatio(mAxle);
+	float engineInertia = mVehicle->getEngine()->getEngineInertia() * transRatio;
 	engineInertia = engineInertia * mAxle->getTorqueShare() / mRadius;
 	float engineCoeff = 1.0f / (inertia + FMath::Abs(engineInertia));
 
@@ -727,8 +758,8 @@ void UFGearWheel::updateWheelSpeed(float dt)
 	if (netTorque > 0.0f)
 	{
 		//target speed, accelerate is false when moving backward with forward gear + throttle
-		bool accelerate = FMath::Sign(mWheelTorque) != FMath::Sign(mBrakeTorque); //signum
-		float targetSpeed = accelerate ? mAxle->getCurRpm() * FGearUtility::rpm2Rads : 0.0f;
+		mAccelerating = FMath::Sign(mWheelTorque) != FMath::Sign(mBrakeTorque); //signum
+		float targetSpeed = mAccelerating ? mAxle->getCurRpm() * FGearUtility::rpm2Rads : 0.0f;
 
 		//update target speed
 		if (mWheelTorque > 0.0f && mRealSpeed > targetSpeed)
@@ -742,15 +773,15 @@ void UFGearWheel::updateWheelSpeed(float dt)
 
 		//calc. wheel acceleration
 		//take engine inertia into account while engine braking
-		accCoeff = accelerate || mBraking > 0.0f ? accCoeff : engineCoeff;
+		accCoeff = mAccelerating || mBraking > 0.0f ? accCoeff : engineCoeff;
 		float angularAcc = FMath::Sign(mWheelTorque) * netTorque * accCoeff; //signum
 		float deltaV = angularAcc * dt;
 
 		//ABS, ASR, handbrake overrides
-		if (accelerate)
+		if (mAccelerating)
 		{
 			//this check avoids unnecessary slips over low friction surfaces at low speeds
-			bool engineBrake = mVehicle->getEngine()->getThrottle() == 0.0f;
+			bool engineBrake = mVehicle->getEngine()->getTorque() <= 0.0f;
 			bool lowSpeedCase = engineBrake && FMath::Abs(mRealSpeed) < 1.0f;
 			bool activate = lowSpeedCase || mASRActive;
 
@@ -765,7 +796,7 @@ void UFGearWheel::updateWheelSpeed(float dt)
 				deltaV *= FMath::Max(scaler, 0.001f);
 			}
 		}
-		else if (!accelerate)
+		else
 		{
 			//set actual abs state
 			bool activate = mABSActive;
@@ -794,6 +825,7 @@ void UFGearWheel::updateWheelSpeed(float dt)
 	}
 	else
 	{
+		mAccelerating = false;
 		//asr & abs requires positive net torque
 		mASRActive = false;
 		mABSActive = false;
@@ -812,7 +844,6 @@ void UFGearWheel::applyRpmLimit(float dt)
 	if (maxSpeedKMH == 0.0f) return;
 	float realSpeedKMH = getKMHSpeed();
 	float clutch = mVehicle->getTransmission()->getClutchState();
-	bool allowReverse = mVehicle->getAllowReverse();
 
 	//if overflow is the same sign as limit, then set tire speed to limit
 	if (FGearUtility::Sign(maxSpeedKMH) == FGearUtility::Sign(realSpeedKMH))
@@ -823,8 +854,6 @@ void UFGearWheel::applyRpmLimit(float dt)
 			mRealSpeed = targetRealSpeedKMH / (FGearUtility::rads2Rpm * mWheelRPMToKMH);
 		}
 	}
-	//if overflow is not the same sign as limit, then set tire speed to 0
-	else if (!allowReverse) mRealSpeed = FMath::Lerp(mRealSpeed, 0.0f, clutch);
 
 	//any need for a braking limit
 	mSpeedOverflow = 0.0f;
@@ -836,7 +865,6 @@ void UFGearWheel::applyRpmLimit(float dt)
 		{
 			mSpeedOverflow = absSpeedKMH - FMath::Abs(maxSpeedKMH);
 		}
-		else if (!allowReverse) mSpeedOverflow = 1.0f;
 
 		if (mSpeedOverflow > 0.0f)
 		{
@@ -903,7 +931,7 @@ void UFGearWheel::updateWheelFriction(float dt)
 		//automatically avoids low speed jitters
 		//this smooths the lng. force but using this for engine torque may result low traction
 		//so this is only activated when braking
-		if (mBraking > 0.0f)
+		if (mBraking > 0.0f && !mAccelerating)
 		{
 			float absCurrentForce = FMath::Abs(currentForce);
 			//required acc. to stop dv/dt
@@ -957,7 +985,7 @@ FVector UFGearWheel::getWheelPosition() const
 {
 	//update wheel z-pos acc. to compress length
 	float compress = mVehicle->getTirePenetration() ? FMath::Max(0.0f, mCompressedLength) : mCompressedLength;
-	FVector wheelPos = -FGearUtility::meter2cm * (compress - mSuspensionUpTravel) * FVector::UpVector;
+	FVector wheelPos = -FGearUtility::meter2cm * (compress - mSuspensionUpTravel - mVerticalOffset) * FVector::UpVector;
 	//update wheel x-pos acc. to forward offset
 	if (mForwardOffset != 0.0f) wheelPos += FGearUtility::meter2cm * mForwardOffset * FVector::ForwardVector;
 	//update wheel y-pos acc. to spacer offset
@@ -969,13 +997,13 @@ FVector UFGearWheel::getWheelPosition() const
 FQuat UFGearWheel::getWheelRotation() const
 {
 	//rolling angle
-	FQuat qp = FGearUtility::Euler(-FMath::RadiansToDegrees(mPitch), 0.0f, 0.0f);
+	FQuat qp = FGearUtility::Euler(FMath::RadiansToDegrees(mPitch), 0.0f, 0.0f);
 	//rotate acc. to camber angle
 	FQuat qc = FGearUtility::Euler(0.0f, 0.0f, mCamberAngle);
 	//rotate acc. to steering & toe
 	FQuat qst = FGearUtility::Euler(0.0f, mCurrentSteer + mToeAngle, 0.0f);
 	//ret
-	return qst * qc * qp;
+	return GetRelativeRotation().Quaternion() * (qst * qc * qp);
 }
 
 //used for slip angle calculation
@@ -1032,12 +1060,13 @@ void UFGearWheel::setRadius(float f)
 	initConvexCaster();
 }
 
-//individual setter for forward/spacer/rim offset
+//individual setter for forward/spacer/vertical/rim offset
 //recalculates local hub postion
-void UFGearWheel::setLateralOffsets(float forward, float spacer, float rim)
+void UFGearWheel::setWheelOffsets(float forward, float spacer, float vertical, float rim)
 {
 	mForwardOffset = forward;
 	mSpacerOffset = spacer;
+	mVerticalOffset = vertical;
 	mRimOffset = rim;
 	updateComponentTransform();
 }
@@ -1092,7 +1121,7 @@ void UFGearWheel::loadState(FFGearVehicleState& state)
 
 FVector2D UFGearWheel::drawTelemetry(UCanvas * Canvas, UFont * Font, FLinearColor textColor, FFontRenderInfo renderInfo, FVector2D p)
 {
-	Canvas->DrawText(Font, FString::Printf(TEXT("%d%s"), mAxle->getIndex(), mSide == FGearWheelSide::WS_LEFT ? TEXT("L") : TEXT("R")), p.X, p.Y + 15, 1.0f, 1.0f, renderInfo);
+	Canvas->DrawText(Font, FString::Printf(TEXT("%d%s"), mAxle->getIndex(), *FString(mSide == FGearWheelSide::WS_LEFT ? "L" : "R")), p.X, p.Y + 15, 1.0f, 1.0f, renderInfo);
 	Canvas->DrawText(Font, FString::Printf(TEXT("%.1f"), getKMHSpeed()), p.X + 23, p.Y + 15, 1.0f, 1.0f, renderInfo);
 	Canvas->DrawText(Font, FString::Printf(TEXT("%.0f"), mWheelTorque), p.X + 70, p.Y + 15, 1.0f, 1.0f, renderInfo);
 	Canvas->DrawText(Font, FString::Printf(TEXT("%.0f"), mCurrentLoad), p.X + 120, p.Y + 15, 1.0f, 1.0f, renderInfo);

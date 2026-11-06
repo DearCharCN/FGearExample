@@ -120,6 +120,10 @@ private:
 	UPROPERTY(Replicated)
 	FFGearInputState mCurrentInput;
 
+	//controller flag
+	UPROPERTY(Replicated)
+	bool mHasController;
+
 	//snapshot states
 	FGearSnapState mCurrentSnap;
 

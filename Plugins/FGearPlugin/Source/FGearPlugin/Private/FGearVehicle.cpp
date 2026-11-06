@@ -12,7 +12,6 @@
 #include "FGearStandardInput.h"
 #include "FGearOrbitCamera.h"
 #include "FGearArcadeAssists.h"
-#include "FGearSuspensionConstraint.h"
 #include "FGearReplication.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -51,15 +50,14 @@ AFGearVehicle::AFGearVehicle() :
 	mConvexVisible(false),
 	mDefaultCylinderAsset(nullptr),
 	mDetectGround(false),
-	mAllowReverse(true),
 	mTirePenetration(true),
 	mRelaxationDownforce(false),
 	mHardContactScale(0.0f),
 	mHandBrakePower(1.0f),
 	mReverseBrakeSpeed(1.0f),
-	mRollingResistanceCoeff(1.0f),
+	mWheelFrictionCoeff(1.0f),
 	mDrivetrainInertia(1.0f),
-	mDrivetrainFriction(50.0f),
+	mDrivetrainFriction(0.5f),
 	mStickyTireSpeed(0.0f),
 	mReactionScale(0.0f),
 	mOptimumSlipWeight(0.0f),
@@ -72,6 +70,7 @@ AFGearVehicle::AFGearVehicle() :
 	mMinOverSteerAngle(20.0f),
 	mFrontAntiRollPower(0.0f),
 	mRearAntiRollPower(0.0f),
+	mMaxHillHolderSpeed(0.0f),
 	mSleepLinearThreshold(0.0f),
 	mSleepAngularThreshold(0.0f),
 	mSleepWaitingTime(1.0f),
@@ -88,7 +87,9 @@ AFGearVehicle::AFGearVehicle() :
 	mNetImpulse(FVector::ZeroVector),
 	mNetImpulseTorque(FVector::ZeroVector),
 	mUpdateInputs(true),
+	mBikeMode(false),
 	mBrakeInput(0.0f),
+	mHoldSign(0.0f),
 	mTime(0.0f),
 	mZero100Time(0.0f),
 	mZero200Time(0.0f),
@@ -159,66 +160,20 @@ AFGearVehicle::AFGearVehicle() :
 
 void AFGearVehicle::BeginPlay()
 {
-	Super::BeginPlay();
-
-	if (mMesh == nullptr) return;
-	mBody = mMesh->GetBodyInstance();
-	if (mBody == nullptr) return;
-
-	//keep all bodies active
-	mMesh->SetAllBodiesSimulatePhysics(true);
-
-	//set mass
-	setMass(mMass);
-
-	//set center of mass offset
-	setCenterOfMassOffset(mCenterofMass);
-	
-	//set inertia tensor
-	setInertiaScale(mInertiaScale);
-
-	//set gravity state
-	mBody->SetEnableGravity(!mCustomGravity);
-
-	//this is available since 5.3 and it's required for 5.4+
-	//kinematic objects do not calculate its velocity if this is off
-#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION > 2
-	mBody->SetUpdateKinematicFromSimulation(true);
-#endif
-
-	mAnimation = Cast<UFGearAnimInstance>(mMesh->GetAnimInstance());
-	if (mAnimation != nullptr) mAnimation->init(mAxleList.Num());
+	//mesh should be set, calling this to update properties
+	setMesh(nullptr, nullptr, nullptr);
 
 	mWheelForces.Init(FVector::ZeroVector, 2 * mAxleList.Num());
 	mWheelTorques.Init(FVector::ZeroVector, 2 * mAxleList.Num());
 
-	TArray<FName> boneNames;
-	mMesh->GetBoneNames(boneNames);
-	for (int i = 0; i < boneNames.Num(); i++)
-	{
-		int boneIndex = mMesh->GetBoneIndex(boneNames[i]);
-		FTransform boneTrans = mMesh->GetBoneTransform(boneIndex, FTransform::Identity);
-		boneTrans.SetScale3D(FVector::OneVector);
-		mBoneTransforms.Add(boneNames[i], boneTrans);
-
-		if (i == 0 && !boneTrans.GetLocation().IsZero())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Root bone must be located in origin of the vehicle (%s)"), *GetName());
-		}
-	}
-
+	//init components
 	mEngine->init(this);
-	for (int i = 0; i < mAxleList.Num(); i++)
-	{
-		mAxleList[i]->init(this, i);
-	}
+	initAxles();
 	mTransmission->init(this);
 	mStandardInput->init(this);
 	mAeroDynamics->init(this);
 	mArcadeAssists = FindComponentByClass<UFGearArcadeAssists>();
 	if (mArcadeAssists) mArcadeAssists->init(this);
-	mSuspensionConstraint = FindComponentByClass<UFGearSuspensionConstraint>();
-	if (mSuspensionConstraint) mSuspensionConstraint->init(this);
 	mReplication->init(this);
 
 #if ENGINE_MAJOR_VERSION == 5
@@ -230,6 +185,8 @@ void AFGearVehicle::BeginPlay()
 #else
 	mMesh->init(this);
 #endif
+
+	Super::BeginPlay();
 }
 
 void AFGearVehicle::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -341,6 +298,100 @@ void AFGearVehicle::initializeAxles(TArray<USceneComponent*> components, int ind
 			}
 		}
 	}
+}
+
+void AFGearVehicle::initAxles()
+{
+	if (mAxleList.Num() == 0) return;
+
+	//init all
+	for (int i = 0; i < mAxleList.Num(); i++)
+	{
+		mAxleList[i]->init(this, i);
+	}
+
+	//sort based on distance to front axle
+	FVector frontPos = mAxleList[0]->getLocalCenter();
+	mAxleList.Sort([&](const UFGearAxle& A, const UFGearAxle& B)
+	{
+		return FVector::DistSquared(frontPos, A.getLocalCenter()) < FVector::DistSquared(frontPos, B.getLocalCenter());
+	});
+
+	//reset indices
+	for (int i = 0; i < mAxleList.Num(); i++)
+	{
+		setAxleIndex(mAxleList[i], i);
+	}
+}
+
+void AFGearVehicle::setAxleIndex(UFGearAxle* axle, int index)
+{
+	if (mAxleList.IsValidIndex(index))
+	{
+		mAxleList[index] = axle;
+		axle->init(this, index);
+	}
+}
+
+void AFGearVehicle::setMesh(USkeletalMesh* mesh, TSubclassOf<UAnimInstance> animClass, UPhysicsAsset* physicsAsset)
+{
+	ensure(mMesh);
+
+	//make changes
+	if (animClass.Get()) mMesh->SetAnimInstanceClass(animClass);
+	if (mesh) mMesh->SetSkeletalMesh(mesh, true);
+	if (physicsAsset) mMesh->SetPhysicsAsset(physicsAsset, true);
+
+	//init animation instance
+	mAnimation = Cast<UFGearAnimInstance>(mMesh->GetAnimInstance());
+	if (mAnimation != nullptr) mAnimation->init(mAxleList.Num());
+
+	//get bone transforms
+	TArray<FName> boneNames;
+	mMesh->GetBoneNames(boneNames);
+	for (int i = 0; i < boneNames.Num(); i++)
+	{
+		int boneIndex = mMesh->GetBoneIndex(boneNames[i]);
+		FTransform boneTrans = mMesh->GetBoneTransform(boneIndex, FTransform::Identity);
+		boneTrans.SetScale3D(FVector::OneVector);
+		mBoneTransforms.Add(boneNames[i], boneTrans);
+
+		if (i == 0 && !boneTrans.GetLocation().IsZero())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Root bone must be located in origin of the vehicle (%s)"), *GetName());
+		}
+	}
+
+	//get body instance
+	mBody = mMesh->GetBodyInstance();
+	ensure(mBody);
+
+	//set mass
+	setMass(mMass);
+
+	//set center of mass offset
+	setCenterOfMassOffset(mCenterofMass);
+
+	//set inertia tensor
+	setInertiaScale(mInertiaScale);
+
+	//set gravity state
+	if (mBody) mBody->SetEnableGravity(!mCustomGravity);
+
+	//this is available since 5.3 and it's required for 5.4+
+	//kinematic objects do not calculate its velocity if this is off
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION > 2
+	if (mBody) mBody->SetUpdateKinematicFromSimulation(true);
+#endif
+
+	//update references
+	for (int i = 0; i < mAxleList.Num(); i++)
+	{
+		mAxleList[i]->getLeftWheel()->refreshVehicleReferences();
+		mAxleList[i]->getRightWheel()->refreshVehicleReferences();
+	}
+	mAeroDynamics->init(this);
+	if (mArcadeAssists) mArcadeAssists->init(this);
 }
 
 FTransform AFGearVehicle::getBoneTransform(FName nm) const
@@ -488,7 +539,7 @@ void AFGearVehicle::Tick(float DeltaTime)
 
 	//call substepTick directly if not substepping or
 	//in case this is a kinematic body(ROLE_SimulatedProxy)
-	if (!mSubstepping || !mBody->bSimulatePhysics) substepTick(DeltaTime);
+	if (!mSubstepping || (mBody && !mBody->bSimulatePhysics)) substepTick(DeltaTime);
 
 	if (mTelemetry.mShowStats) updateStats(DeltaTime);
 
@@ -506,19 +557,8 @@ void AFGearVehicle::substepTick(float dt)
 {
 	if (mBody == nullptr || getIsSleeping()) return;
 	
-	//brake when throttle against drive force
-	if (mReverseBrakeSpeed > 0.0f)
-	{
-		float curSpeed = getMaxWheelKMHSpeed(false, false);
-		int curGear = mTransmission->getCurGear();
-		if (curGear != 0  && FMath::Abs(curSpeed) > mReverseBrakeSpeed && FGearUtility::Sign(curGear) != FGearUtility::Sign(curSpeed))
-		{
-			if (mEngine->getThrottle() > 0.0f && mBrakeInput == 0.0f)
-			{
-				setBraking(1.0f, mHandbrakeOn);
-			}
-		}
-	}
+	//brake alteration
+	updateAutoBrake();
 
 	//custom gravity
 	if (mCustomGravity)
@@ -554,7 +594,7 @@ void AFGearVehicle::substepTick(float dt)
 	//update @ mUpdateRate Hz
 	{
 		mTime += dt;
-		float dts = 1.0f / mUpdateRate;
+		float dts = GetActorTimeDilation() / mUpdateRate;
 		//no sub steps in stick state
 		if (mStickyTireState < 1.0f) dts = dt;
 		mSimCoeff = dts / dt;
@@ -612,7 +652,6 @@ void AFGearVehicle::substepTick(float dt)
 	updateAntiRollBar();
 	mAeroDynamics->myFixedUpdate();
 	if (mArcadeAssists) mArcadeAssists->substepTick(dt);
-	if (mSuspensionConstraint) mSuspensionConstraint->substepTick();
 
 	//apply net force/torque
 #if ENGINE_MAJOR_VERSION == 5
@@ -877,6 +916,52 @@ void AFGearVehicle::updateAntiRollBar()
 	}
 }
 
+void AFGearVehicle::updateAutoBrake()
+{
+	//hillholder
+	if (mMaxHillHolderSpeed > 0.0f)
+	{
+		int curGear = mTransmission->getCurGear();
+		float speedSign = FGearUtility::Sign(getKMHSpeed()); //no zero
+		float gearSign = FMath::Sign(curGear);
+		float curSpeed = getMyVelocity().Size2D() * FGearUtility::cms2kmh; //use horizontal velocity size
+		float localSpringX = getLocalSpringForce().X;
+		float springThreshold = 0.1f * mMass; //hand tuned, could be exposed
+		
+		//activate hold if signs do not match
+		if (curGear != 0 && curSpeed < mMaxHillHolderSpeed && speedSign != gearSign && FMath::Abs(localSpringX) > springThreshold)
+		{
+			mHoldSign = speedSign;
+		}
+		//deactivate hold with throttle or gear sign
+		else if ((mEngine->getThrottle() > 0.0f && mHoldSign != speedSign) || mHoldSign == gearSign || mHoldSign != FMath::Sign(localSpringX) || curGear == 0)
+		{
+			mHoldSign = 0.0f;
+		}
+
+		//brake if holding
+		if (mHoldSign != 0.0f)
+		{
+			setBraking(1.0f - mEngine->getThrottle(), mHandbrakeOn);
+			return;
+		}
+	}
+
+	//brake when throttle against drive force
+	if (mReverseBrakeSpeed > 0.0f)
+	{
+		float curSpeed = getKMHSpeed();
+		int curGear = mTransmission->getCurGear();
+		if (curGear != 0 && FMath::Abs(curSpeed) > mReverseBrakeSpeed && FGearUtility::Sign(curGear) != FGearUtility::Sign(curSpeed))
+		{
+			if (mEngine->getThrottle() > 0.0f && mBrakeInput == 0.0f)
+			{
+				setBraking(1.0f, mHandbrakeOn);
+			}
+		}
+	}
+}
+
 //designed only for 4 wheel vehicles
 void AFGearVehicle::updateESP()
 {
@@ -1077,15 +1162,26 @@ float AFGearVehicle::getMaxWheelKMHSpeed(bool onlyPowered, bool absValue) const
 float AFGearVehicle::getMinWheelKMHSpeed(bool onlyPowered) const
 {
 	float speed = FLT_MAX;
+	float sign = 0.0f;
 	for (int i = 0; i < mAxleList.Num(); i++)
 	{
 		if (!onlyPowered || mAxleList[i]->getTorqueShare() > 0.0f)
 		{
-			speed = FMath::Min(speed, FMath::Abs(mAxleList[i]->getLeftWheel()->getKMHSpeed()));
-			speed = FMath::Min(speed, FMath::Abs(mAxleList[i]->getRightWheel()->getKMHSpeed()));
+			float wspeed = mAxleList[i]->getLeftWheel()->getKMHSpeed();
+			if (FMath::Abs(wspeed) < speed)
+			{
+				speed = FMath::Abs(wspeed);
+				sign = FMath::Sign(wspeed);
+			}
+			wspeed = mAxleList[i]->getRightWheel()->getKMHSpeed();
+			if (FMath::Abs(wspeed) < speed)
+			{
+				speed = FMath::Abs(wspeed);
+				sign = FMath::Sign(wspeed);
+			}
 		}
 	}
-	return speed;
+	return sign * speed;
 }
 
 //used for engine feedback
@@ -1093,19 +1189,21 @@ float AFGearVehicle::getFeedbackWheelRPM() const
 {
 	float finalRpm = 0.0f;
 	float sign = 1.0f;
+	float finalGearRatio = 1.0f;
 	for (int j = 0; j < mAxleList.Num(); j++)
 	{
 		if (mAxleList[j]->getTorqueShare() > 0.0f)
 		{
 			float crpm = mAxleList[j]->getRPM();
-			if (finalRpm < FMath::Abs(crpm))
+			if (FMath::Abs(crpm) > finalRpm)
 			{
 				finalRpm = FMath::Abs(crpm);
 				sign = FGearUtility::Sign(crpm);
+				finalGearRatio = mAxleList[j]->getFinalGearRatio();
 			}
 		}
 	}
-	return sign * finalRpm * mTransmission->getTransmissionRatio();
+	return sign * finalRpm * finalGearRatio * mTransmission->getCurrentGearRatio();
 }
 
 //used for engine braking
@@ -1119,7 +1217,7 @@ float AFGearVehicle::getWheelSpeedLimitKMH() const
 		if (leftSpeed > limit) limit = leftSpeed;
 		if (rightSpeed > limit) limit = rightSpeed;
 	}
-	return limit * FMath::Sign(mTransmission->getTransmissionRatio());
+	return limit * FMath::Sign(mTransmission->getCurrentGearRatio());
 }
 
 //used for max speed calculations
@@ -1152,9 +1250,10 @@ float AFGearVehicle::getMaxWheelRPMToKMH() const
 			{
 				UFGearWheelOptions* opts = Cast<UFGearWheelOptions>(comp);
 				UFGearAxle* axle = Cast<UFGearAxle>(opts->GetAttachParent());
-				if (axle && axle->getTorqueShare() > 0.0f)
+				if (axle && axle->getTorqueShare() > 0.0f && axle->getFinalGearRatio() > 0.0f)
 				{
-					float ratio = 2.0f * PI * opts->getRadius() * 60.0f / 1000.0f; //WheelRPMToKMH
+					//WheelRPMToKMH
+					float ratio = 2.0f * PI * opts->getRadius() * 60.0f / 1000.0f / axle->getFinalGearRatio();
 					maxRatio = FMath::Max(maxRatio, ratio);
 				}
 			}
@@ -1218,6 +1317,17 @@ FVector AFGearVehicle::getLocalInertiaTensor() const
 	return FVector(1.0f / mLocalIIT.M[0][0], 1.0f / mLocalIIT.M[1][1], 1.0f / mLocalIIT.M[2][2]);
 }
 
+FVector AFGearVehicle::getLocalSpringForce() const
+{
+	FVector force(0.0f);
+	for (int i = 0; i < mAxleList.Num(); i++)
+	{
+		force += mAxleList[i]->getLeftWheel()->getLocalSpring();
+		force += mAxleList[i]->getRightWheel()->getLocalSpring();
+	}
+	return force;
+}
+
 void AFGearVehicle::addForce(FVector f)
 {
 	mNetForce += f;
@@ -1257,6 +1367,14 @@ void AFGearVehicle::addImpulseAtPosition(FVector i, FVector p)
 void AFGearVehicle::addImpulsiveTorque(FVector it)
 {
 	mNetImpulseTorque += it;
+}
+
+void AFGearVehicle::applyResponseOverrides(FCollisionResponseParams& responseParams)
+{
+	for (auto& e : mResponseOverrides)
+	{
+		responseParams.CollisionResponse.SetResponse(e.Key, e.Value);
+	}
 }
 
 void AFGearVehicle::PostRenderFor(class APlayerController* PC, class UCanvas* Canvas, FVector CameraPosition, FVector CameraDir)

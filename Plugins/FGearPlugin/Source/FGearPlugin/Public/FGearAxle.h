@@ -84,6 +84,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getTorqueShare() const { return mTorqueShare; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
+	float getFinalGearRatio() const { return mFinalGearRatio; }
+	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getMaxSteerAngle() const { return mMaxSteerAngle; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getAckermanCoeff() const { return mAckermanCoeff; }
@@ -105,10 +107,8 @@ public:
 	void applyWheelOptions();
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setTorqueShare(float f) { mTorqueShare = f; }
-	// Compatibility for the 4.27 sample UI. In FGear 1.8.2 the final ratio is
-	// shared by the vehicle's transmission, rather than stored on each axle.
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setFinalGearRatio(float f);
+	void setFinalGearRatio(float f) { mFinalGearRatio = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setMaxSteerAngle(float f) { mMaxSteerAngle = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -148,6 +148,9 @@ private:
 	/** The ratio of the torque received from engine. In reality the sum of the shares should be 1 but it is not constraint */
 	UPROPERTY(EditAnywhere, Category = "FGearAxle", DisplayName = "Torque Share", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float mTorqueShare;
+	/** The transmission value is calculated from the current gear ratio and this final gear ratio(also called final drive). In real cars this is the gear ratio between the the driveshaft and the axle which can determine the acceleration and the top speed of the vehicle. Higher values result faster accelerations and lower top speeds. */
+	UPROPERTY(EditAnywhere, Category = "FGearAxle", DisplayName = "Final Gear Ratio")
+	float mFinalGearRatio;
 	/** Maximum angle(degree) of steering for this axles wheels. For non steering wheels just leave it at 0. */
 	UPROPERTY(EditAnywhere, Category = "FGearAxle", DisplayName = "Max Steer Angle", meta = (ClampMin = "-90.0", ClampMax = "90.0", UIMin = "-90.0", UIMax = "90.0"))
 	float mMaxSteerAngle;

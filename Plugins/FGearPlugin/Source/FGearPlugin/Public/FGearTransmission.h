@@ -9,6 +9,7 @@
 #include "FGearTransmission.generated.h"
 
 class AFGearVehicle;
+class UFGearAxle;
 #if WITH_EDITOR
 class FInfoTextLayout;
 #endif
@@ -41,11 +42,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void gearDown(bool skipN);
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	float getTransmissionRatio() const;
+	float getCurrentGearRatio() const;
+	UFUNCTION(BlueprintCallable, Category = "FGear")
+	float getTransmissionRatio(const UFGearAxle* axle) const;
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getGearRatio(int gear) const;
-	UFUNCTION(BlueprintCallable, Category = "FGear")
-	float getFinalGearRatio() const { return mFinalGearRatio; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	float getGearMaxSpeed(int gear) const { return mMaxSpeeds.IsValidIndex(gear) ? mMaxSpeeds[gear] : -1.0f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -82,11 +83,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	int getGearCount() const { return mGearRatios.Num(); }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setGearCount(int size) { mGearRatios.SetNum(size, EAllowShrinking::Yes); }
+	void setGearCount(int size);
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setGearRatio(int gear, float ratio) { mGearRatios[gear] = ratio; }
-	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setFinalGearRatio(float f) { mFinalGearRatio = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setAutoChange(bool b) { mAutoChange = b; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
@@ -169,9 +168,6 @@ private:
 	/** This is an array of values which are used for calculating the final transmission ratio along with final drive. If you need a 5 speed car then the size should be 6 with the addition of rear gear. So the first 5 values are forward ratios and the last one is the rear gear ratio. All values should be positive and you can find real cars values on the internet. The default vehicle has only 1 forward and 1 backward gear so you can try the values in the image above. */
 	UPROPERTY(EditAnywhere, Category = "FGearTransmission", DisplayName = "Gear Ratios")
 	TArray<float> mGearRatios;
-	/** The transmission value is calculated from the current gear ratio and this final gear ratio(also called final drive). In real cars this is the gear ratio between the the driveshaft and the axle which can determine the acceleration and the top speed of the vehicle. Higher values result faster accelerations and lower top speeds. */
-	UPROPERTY(EditAnywhere, Category = "FGearTransmission", DisplayName = "Final Gear Ratio")
-	float mFinalGearRatio;
 	/** This is an experimental feature. When you first launch the vehicle or when you try to climb a steep slope,
 	    the rpm can stay at a low level until you reach a certain speed since there is not enough torque and there is no engine stalling.
 		This is quite observable when you have a long first fear ratio. This assist will scale the power of the clutch in order to fight with this behavior.

@@ -11,8 +11,6 @@
 #include "Engine/World.h"
 #include "Sound/SoundWave.h"
 #include "FGearSkeletalMeshComponent.h"
-#include "NiagaraComponent.h"
-#include "NiagaraSystem.h"
 
 UFGearEffects::UFGearEffects() :
 	UFGearTelemetryDrawer(),
@@ -62,6 +60,7 @@ UFGearEffects::UFGearEffects() :
 	mSleepEventsRegistered(false)
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.TickGroup = ETickingGroup::TG_PostPhysics;
 }
 
 void UFGearEffects::BeginPlay()
@@ -83,7 +82,17 @@ void UFGearEffects::BeginPlay()
 
 	//smokes
 	mSmokes.Init(nullptr, wheels);
-	// Create the component lazily to match the surface's Cascade or Niagara asset.
+	for (int i = 0; i < wheels; i++)
+	{
+		mSmokes[i] = NewObject<UNiagaraComponent>(this, UNiagaraComponent::StaticClass());
+		if (mSmokes[i])
+		{
+			mSmokes[i]->RegisterComponent();
+			mSmokes[i]->SetRelativeLocation(FVector::ZeroVector);
+			mSmokes[i]->AttachToComponent(this, FAttachmentTransformRules(EAttachmentRule::KeepRelative, true));
+			mSmokes[i]->bAutoActivate = false;
+		}
+	}
 
 	//sounds
 	mEngineHighComponent = initAudio(mEngineHigh, mEngineHighBasePitch, mEngineHighPitchScale, mEngineHighInnerRadius, mEngineHighFalloffDistance);
@@ -175,6 +184,7 @@ void UFGearEffects::physicsSurfaceUpdate()
 	{
 		UFGearWheel* w = mWheels[i];
 		w->setFrictionFactor(1.0f);
+		w->setAdditionalDrag(0.0f);
 
 		FHitResult hit = w->getRayHit();
 		if (hit.PhysMaterial == nullptr) continue;
@@ -222,36 +232,12 @@ void UFGearEffects::effectUpdate(float dt)
 		//smokes
 		if (mEnableTireSmoke && cs && physicalMaterial->mSmokeParticle != nullptr)
 		{
-			if (!mSmokes[i] || mSmokes[i]->GetFXSystemAsset() != physicalMaterial->mSmokeParticle)
-			{
-				if (mSmokes[i]) mSmokes[i]->DestroyComponent();
-				mSmokes[i] = nullptr;
-				if (UNiagaraSystem* system = Cast<UNiagaraSystem>(physicalMaterial->mSmokeParticle))
-				{
-					UNiagaraComponent* smoke = NewObject<UNiagaraComponent>(GetOwner());
-					smoke->SetAsset(system);
-					mSmokes[i] = smoke;
-				}
-				else if (UParticleSystem* cascadeSystem = Cast<UParticleSystem>(physicalMaterial->mSmokeParticle))
-				{
-					UParticleSystemComponent* smoke = NewObject<UParticleSystemComponent>(GetOwner());
-					smoke->SetTemplate(cascadeSystem);
-					mSmokes[i] = smoke;
-				}
-				if (mSmokes[i])
-				{
-					mSmokes[i]->bAutoActivate = false;
-					mSmokes[i]->SetupAttachment(this);
-					mSmokes[i]->RegisterComponent();
-				}
-			}
-			if (mSmokes[i])
-			{
-				mSmokes[i]->SetWorldLocation(hit.ImpactPoint);
-				mSmokes[i]->Activate();
-			}
+			if (mSmokes[i]->GetAsset() == nullptr || mSmokes[i]->GetAsset() != physicalMaterial->mSmokeParticle)
+				mSmokes[i]->SetAsset(physicalMaterial->mSmokeParticle);
+			mSmokes[i]->Activate();
+			mSmokes[i]->SetWorldLocation(hit.ImpactPoint);
 		}
-		else if (mSmokes[i])
+		else
 		{
 			mSmokes[i]->Deactivate();
 		}

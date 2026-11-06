@@ -49,6 +49,7 @@ UFGearArcadeAssists::UFGearArcadeAssists() :
 void UFGearArcadeAssists::init(AFGearVehicle* v)
 {
 	mVehicle = v;
+	mVehicle->setBikeMode(mBikeHelper);
 	mBody = mVehicle->getBody();
 
 	int axles = mVehicle->getAxleCount();
@@ -94,11 +95,12 @@ void UFGearArcadeAssists::setInstantSpeed(float kmhSpeed, int gear)
 	if (gear >= -1 && gear <= mVehicle->getTransmission()->getMaxGear())
 	{
 		mVehicle->getTransmission()->setCurrentGear(gear, true);
+		//Vehicle.getClutch().reset(); TODO
 	}
 
 	//sync engine rpm, find fastest wheel rpm
 	float wheelRpm = kmhSpeed / mVehicle->getMaxWheelRPMToKMH();
-	float targetRpm = wheelRpm * mVehicle->getTransmission()->getTransmissionRatio();
+	float targetRpm = wheelRpm * mVehicle->getTransmission()->getCurrentGearRatio();
 	mVehicle->getEngine()->setRpm(targetRpm);
 }
 

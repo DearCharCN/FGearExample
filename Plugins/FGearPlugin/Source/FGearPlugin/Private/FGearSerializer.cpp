@@ -45,11 +45,10 @@ bool FGearSerializer::saveSettings(AFGearVehicle* v, FString path)
 	jObject->SetBoolField("CustomGravity", v->mCustomGravity);
 	jObject->SetArrayField("Gravity", fromVectorToArray(v->mGravity));
 	jObject->SetNumberField("HandBrakePower", v->mHandBrakePower);
-	jObject->SetNumberField("RollingResistanceCoeff", v->mRollingResistanceCoeff);
+	jObject->SetNumberField("WheelFrictionCoeff", v->mWheelFrictionCoeff);
 	jObject->SetNumberField("StickyTireSpeed", v->mStickyTireSpeed);
 	jObject->SetNumberField("OptimumSlipWeight", v->mOptimumSlipWeight);
 	jObject->SetNumberField("ReactionScale", v->mReactionScale);
-	jObject->SetBoolField("AllowReverse", v->mAllowReverse);
 	jObject->SetBoolField("DetectGround", v->mDetectGround);
 	jObject->SetNumberField("HardContactScale", v->mHardContactScale);
 	jObject->SetBoolField("RelaxationDownforce", v->mRelaxationDownforce);
@@ -80,6 +79,7 @@ bool FGearSerializer::saveSettings(AFGearVehicle* v, FString path)
 	jObject->SetNumberField("MinOverSteerAngle", v->mMinOverSteerAngle);
 	jObject->SetNumberField("FrontAntiRollPower", v->mFrontAntiRollPower);
 	jObject->SetNumberField("RearAntiRollPower", v->mRearAntiRollPower);
+	jObject->SetNumberField("MaxHillHolderSpeed", v->mMaxHillHolderSpeed);
 
 	// FGearVehicle|Optimization
 	jObject->SetNumberField("SleepLinearThreshold", v->mSleepLinearThreshold);
@@ -109,7 +109,6 @@ bool FGearSerializer::saveSettings(AFGearVehicle* v, FString path)
 	jObject->SetNumberField("Transmission_ClutchTime", v->mTransmission->mClutchTime);
 	jObject->SetNumberField("Transmission_ClutchScale", v->mTransmission->mClutchScale);
 	jObject->SetArrayField("Transmission_GearRatios", fromTArrayToJsonArray(v->mTransmission->mGearRatios));
-	jObject->SetNumberField("Transmission_FinalGearRatio", v->mTransmission->mFinalGearRatio);
 	jObject->SetBoolField("Transmission_ClutchAssist", v->mTransmission->mClutchAssist);
 	jObject->SetNumberField("Transmission_ClutchScaleMin", v->mTransmission->mClutchScaleMin);
 	jObject->SetNumberField("Transmission_ClutchScaleMax", v->mTransmission->mClutchScaleMax);
@@ -193,6 +192,7 @@ bool FGearSerializer::saveSettings(AFGearVehicle* v, FString path)
 			jObject->SetNumberField(axle->GetName() + "_DifferentialType", (uint8)axle->mDifferentialType);
 			jObject->SetNumberField(axle->GetName() + "_DiffStrength", axle->mDiffStrength);
 			jObject->SetNumberField(axle->GetName() + "_TorqueShare", axle->mTorqueShare);
+			jObject->SetNumberField(axle->GetName() + "_FinalGearRatio", axle->mFinalGearRatio);
 			jObject->SetNumberField(axle->GetName() + "_MaxSteerAngle", axle->mMaxSteerAngle);
 			jObject->SetNumberField(axle->GetName() + "_AckermanCoeff", axle->mAckermanCoeff);
 			jObject->SetNumberField(axle->GetName() + "_AckermanReferenceIndex", axle->mAckermanReferenceIndex);
@@ -261,11 +261,10 @@ bool FGearSerializer::loadSettings(AFGearVehicle* v, FString path)
 	v->mCustomGravity = jObject->GetBoolField(TEXT("CustomGravity"));
 	v->mGravity = fromArrayToVector(jObject->GetArrayField(TEXT("Gravity")));
 	v->mHandBrakePower = FMath::Clamp((float)jObject->GetNumberField(TEXT("HandBrakePower")), 1.0f, 100.0f);
-	v->mRollingResistanceCoeff = jObject->GetNumberField(TEXT("RollingResistanceCoeff"));
+	v->mWheelFrictionCoeff = jObject->GetNumberField(TEXT("WheelFrictionCoeff"));
 	v->mStickyTireSpeed = FMath::Clamp((float)jObject->GetNumberField(TEXT("StickyTireSpeed")), 0.0f, 5.0f);
 	v->mOptimumSlipWeight = FMath::Clamp((float)jObject->GetNumberField(TEXT("OptimumSlipWeight")), 0.0f, 1.0f);
 	v->mReactionScale = FMath::Clamp((float)jObject->GetNumberField(TEXT("ReactionScale")), 0.0f, 1.0f);
-	v->mAllowReverse = jObject->GetBoolField(TEXT("AllowReverse"));
 	v->mDetectGround = jObject->GetBoolField(TEXT("DetectGround"));
 	v->mHardContactScale = jObject->GetNumberField(TEXT("HardContactScale"));
 	v->mRelaxationDownforce = jObject->GetBoolField(TEXT("RelaxationDownforce"));
@@ -296,6 +295,7 @@ bool FGearSerializer::loadSettings(AFGearVehicle* v, FString path)
 	v->mMinOverSteerAngle = FMath::Clamp((float)jObject->GetNumberField(TEXT("MinOverSteerAngle")), 1.0f, 90.0f);
 	v->mFrontAntiRollPower = FMath::Clamp((float)jObject->GetNumberField(TEXT("FrontAntiRollPower")), 0.0f, 100.0f);
 	v->mRearAntiRollPower = FMath::Clamp((float)jObject->GetNumberField(TEXT("RearAntiRollPower")), 0.0f, 100.0f);
+	v->mMaxHillHolderSpeed = FMath::Clamp((float)jObject->GetNumberField(TEXT("MaxHillHolderSpeed")), 0.0f, 5.0f);
 
 	// FGearVehicle|Optimization
 	v->mSleepLinearThreshold = jObject->GetNumberField(TEXT("SleepLinearThreshold"));
@@ -325,7 +325,6 @@ bool FGearSerializer::loadSettings(AFGearVehicle* v, FString path)
 	v->mTransmission->mClutchTime = FMath::Clamp((float)jObject->GetNumberField(TEXT("Transmission_ClutchTime")), 1.0f, 1000.0f);
 	v->mTransmission->mClutchScale = FMath::Clamp((float)jObject->GetNumberField(TEXT("Transmission_ClutchScale")), 1.0f, 1000.0f);
 	v->mTransmission->mGearRatios = fromJsonArrayToFloatArray(jObject->GetArrayField(TEXT("Transmission_GearRatios")));
-	v->mTransmission->mFinalGearRatio = jObject->GetNumberField(TEXT("Transmission_FinalGearRatio"));
 	v->mTransmission->mClutchAssist = jObject->GetBoolField(TEXT("Transmission_ClutchAssist"));
 	v->mTransmission->mClutchScaleMin = FMath::Clamp((float)jObject->GetNumberField(TEXT("Transmission_ClutchScaleMin")), 0.0f, 100.0f);
 	v->mTransmission->mClutchScaleMax = FMath::Clamp((float)jObject->GetNumberField(TEXT("Transmission_ClutchScaleMax")), 0.0f, 100.0f);
@@ -413,6 +412,7 @@ bool FGearSerializer::loadSettings(AFGearVehicle* v, FString path)
 			axle->mDifferentialType = (FGearDifferentialType)jObject->GetIntegerField(axle->GetName() + "_DifferentialType");
 			axle->mDiffStrength = FMath::Clamp((float)jObject->GetNumberField(axle->GetName() + "_DiffStrength"), 0.0f, 1.0f);
 			axle->mTorqueShare = FMath::Clamp((float)jObject->GetNumberField(axle->GetName() + "_TorqueShare"), 0.0f, 1.0f);
+			axle->mFinalGearRatio = (float)jObject->GetNumberField(axle->GetName() + "_FinalGearRatio");
 			axle->mMaxSteerAngle = FMath::Clamp((float)jObject->GetNumberField(axle->GetName() + "_MaxSteerAngle"), -90.0f, 90.0f);
 			axle->mAckermanCoeff = FMath::Clamp((float)jObject->GetNumberField(axle->GetName() + "_AckermanCoeff"), -1.0f, 1.0f);
 			axle->mAckermanReferenceIndex = jObject->GetIntegerField(axle->GetName() + "_AckermanReferenceIndex");

@@ -30,7 +30,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setFreeze(bool f) { mFreeze = f; }
 	UFUNCTION(BlueprintCallable, Category = "FGear")
-	void setOrbitMode(bool orbit) { } // Legacy Blueprint hook; mouse movement now controls orbit mode.
+	void setOrbitMode(bool orbit) { } // Legacy sample hook; mouse movement controls the orbit hold.
 
 	UFUNCTION(BlueprintCallable, Category = "FGear")
 	void setSpring(float s) { mSpring = s; }

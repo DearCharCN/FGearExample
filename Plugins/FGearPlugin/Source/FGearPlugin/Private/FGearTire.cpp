@@ -6,6 +6,7 @@
 UFGearTire::UFGearTire() :
 	UObject(),
 	mReferenceLoad(3000.0f),
+	mReferenceCamber(0.0f),
 	mReferenceTirePressure(2.0f),
 	mForceSymmetry(false)
 {
@@ -31,7 +32,7 @@ void UFGearTire::calculateMaxLongitudinalForce()
 
 	for (float i = 0.0f; i <= 1.0f; i += 0.01f)
 	{
-		calculate(mReferenceLoad, i, 0.0f, 0.0f, mReferenceTirePressure, 0.0f, 0.0f);
+		calculate(mReferenceLoad, i, 0.0f, FMath::DegreesToRadians(mReferenceCamber), mReferenceTirePressure, 0.0f, 0.0f);
 		if (mLongitudinalForce > mMaxLongitudinalForce)
 		{
 			mMaxLongitudinalForce = mLongitudinalForce;
@@ -47,7 +48,7 @@ void UFGearTire::calculateMaxLateralForce()
 	for (float i = 0.0f; i <= 1.0f; i += 0.01f)
 	{
 		float angle = i * 0.5f * PI;
-		calculate(mReferenceLoad, 0.0f, angle, 0.0f, mReferenceTirePressure, 0.0f, 0.0f);
+		calculate(mReferenceLoad, 0.0f, angle, FMath::DegreesToRadians(mReferenceCamber), mReferenceTirePressure, 0.0f, 0.0f);
 		if (mLateralForce > mMaxLateralForce)
 		{
 			mMaxLateralForce = mLateralForce;
@@ -65,9 +66,9 @@ void UFGearTire::updatePreviewCurve()
 	{
 		float fi = i / 100.0f;
 		float angle = fi * 0.475f * PI;
-		calculate(mReferenceLoad, fi, 0.0f, 0.0f, mReferenceTirePressure, 0.0f, 0.0f);
+		calculate(mReferenceLoad, fi, 0.0f, FMath::DegreesToRadians(mReferenceCamber), mReferenceTirePressure, 0.0f, 0.0f);
 		mLngCurve.EditorCurveData.AddKey(fi, getLongitudinalForce());
-		calculate(mReferenceLoad, 0.0f, angle, 0.0f, mReferenceTirePressure, 0.0f, 0.0f);
+		calculate(mReferenceLoad, 0.0f, angle, FMath::DegreesToRadians(mReferenceCamber), mReferenceTirePressure, 0.0f, 0.0f);
 		mLatCurve.EditorCurveData.AddKey(angle, getLateralForce());
 	}
 }

@@ -30,10 +30,10 @@ public class FGearPlugin : ModuleRules
 				"Core",
 				"ProceduralMeshComponent",
 				"EnhancedInput",
-				"Niagara",
 				"PhysicsCore", //for 4.26+
 				"NetCore",
-				"AIModule"
+				"AIModule",
+				"Niagara"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
