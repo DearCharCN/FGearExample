@@ -1,0 +1,17 @@
+[CommonSettings]
+SourcePath=@PLUGIN_DIR@/Content/Localization/FGearEditor
+DestinationPath=@PLUGIN_DIR@/Content/Localization/FGearEditor
+ManifestName=FGearEditor.manifest
+ArchiveName=FGearEditor.archive
+PortableObjectName=FGearEditor.po
+NativeCulture=en
+CulturesToGenerate=zh-Hans
+CulturesToGenerate=en
+
+[GatherTextStep0]
+CommandletClass=InternationalizationExport
+bExportLoc=true
+LocalizedTextCollapseMode=ELocalizedTextCollapseMode::IdenticalTextIdAndSource
+POFormat=EPortableObjectFormat::Unreal
+ShouldPersistCommentsOnExport=false
+ShouldAddSourceLocationsAsComments=true

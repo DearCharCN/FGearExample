@@ -13,6 +13,12 @@
 	"EngineVersion": "5.8.0",
 	"CanContainContent": true,
 	"Installed": true,
+	"LocalizationTargets": [
+		{
+			"Name": "FGearEditor",
+			"LoadingPolicy": "Editor"
+		}
+	],
 	"Modules": [
 		{
 			"Name": "FGearPlugin",
